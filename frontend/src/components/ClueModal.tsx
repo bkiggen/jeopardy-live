@@ -91,8 +91,17 @@ export function ClueModal({ clue, players, award, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-6 z-50">
-      <div className="bg-jeopardy-navy rounded-lg w-full max-w-5xl border-4 border-jeopardy-gold/60 shadow-2xl animate-clue-in flex flex-col max-h-[92vh]">
+    <div
+      className="fixed inset-0 bg-black/85 flex items-center justify-center p-6 z-50 cursor-pointer"
+      onClick={onClose}
+      role="button"
+      tabIndex={-1}
+      aria-label="Close clue"
+    >
+      <div
+        className="bg-jeopardy-navy rounded-lg w-full max-w-5xl border-4 border-jeopardy-gold/60 shadow-2xl animate-clue-in flex flex-col max-h-[92vh] cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-6 py-3 border-b-2 border-jeopardy-gold/40">
           <span className="font-display text-jeopardy-gold text-5xl tracking-wider">
             ${clue.value}
