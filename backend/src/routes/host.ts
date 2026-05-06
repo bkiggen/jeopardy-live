@@ -12,9 +12,13 @@ router.post('/speak', requirePasscode, async (req, res) => {
   }
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.ELEVENLABS_VOICE_ID;
+  const { getSettings } = await import('../lib/settings.js');
+  const { VOICES } = await import('../lib/voices.js');
+  const settings = getSettings();
+  const voice = VOICES.find((v) => v.id === settings.voice);
+  const voiceId = voice?.voiceId ?? process.env.ELEVENLABS_VOICE_ID;
   if (!apiKey || !voiceId) {
-    res.status(500).json({ error: 'ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID not configured' });
+    res.status(500).json({ error: 'ELEVENLABS_API_KEY missing or no voice configured' });
     return;
   }
 

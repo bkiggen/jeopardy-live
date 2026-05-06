@@ -118,13 +118,22 @@ export function GameBoard() {
           </div>
         )}
         {isHost && (
-          <button
-            type="button"
-            onClick={() => actions.resetRound()}
-            className="px-8 py-4 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-display text-2xl tracking-wide hover:bg-jeopardy-cream transition-colors"
-          >
-            Start New Round
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => actions.resetRound()}
+              className="px-8 py-4 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-display text-2xl tracking-wide hover:bg-jeopardy-cream transition-colors"
+            >
+              Start New Round
+            </button>
+            <button
+              type="button"
+              onClick={() => playClip('goodbye')}
+              className="px-8 py-4 bg-white/10 text-jeopardy-cream rounded font-display text-2xl tracking-wide hover:bg-white/20 transition-colors"
+            >
+              End Game
+            </button>
+          </div>
         )}
       </div>
     );

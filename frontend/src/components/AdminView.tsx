@@ -113,34 +113,76 @@ export function AdminView({ refreshPlayers }: Props) {
     setLeaderboard(board);
   }
 
+  async function selectVoice(voiceId: string) {
+    setBusy(true);
+    try {
+      const result = await callProtected(() => api.setSettings({ voice: voiceId }));
+      if (result == null) return;
+      setSettings(result);
+    } finally {
+      setBusy(false);
+      void refreshSettings();
+    }
+  }
+
   return (
     <div className="flex-1 rounded-lg bg-jeopardy-navy p-6 flex flex-col gap-8">
       {/* Settings */}
       <section>
         <h2 className="text-jeopardy-gold text-xl font-bold mb-3">SETTINGS</h2>
-        <div className="bg-white/5 rounded p-4 flex items-center justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-jeopardy-cream font-medium">
-              Money-burning mode {settings.moneyBurningMode ? '🔥' : ''}
-            </span>
-            <span className="text-jeopardy-cream/60 text-xs">
-              When ON, the host's voice reads each clue aloud via ElevenLabs
-              live (≈$0.005/clue + character usage). When OFF, only the
-              committed sound clips play. Default: OFF.
-            </span>
+        <div className="flex flex-col gap-3">
+          <div className="bg-white/5 rounded p-4 flex flex-col gap-2">
+            <span className="text-jeopardy-cream font-medium">Host voice</span>
+            <div className="flex flex-wrap gap-2">
+              {settings.voices.map((v) => {
+                const active = v.id === settings.voice;
+                return (
+                  <button
+                    type="button"
+                    key={v.id}
+                    onClick={() => selectVoice(v.id)}
+                    disabled={busy || active}
+                    className={`px-4 py-2 rounded font-bold text-sm transition-colors disabled:opacity-70 ${
+                      active
+                        ? 'bg-jeopardy-gold text-jeopardy-navy-deep'
+                        : 'bg-white/10 hover:bg-white/20 text-jeopardy-cream'
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-jeopardy-cream/60 text-xs">
+              Switches the canned soundboard between voice variants and tells
+              live (money-burning) synthesis which voice to use.
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={toggleMoneyBurning}
-            disabled={busy}
-            className={`shrink-0 px-5 py-2 rounded font-bold text-sm uppercase tracking-widest transition-colors disabled:opacity-50 ${
-              settings.moneyBurningMode
-                ? 'bg-red-600 hover:bg-red-500 text-white'
-                : 'bg-white/10 hover:bg-white/20 text-jeopardy-cream'
-            }`}
-          >
-            {settings.moneyBurningMode ? 'ON' : 'OFF'}
-          </button>
+
+          <div className="bg-white/5 rounded p-4 flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-jeopardy-cream font-medium">
+                Money-burning mode {settings.moneyBurningMode ? '🔥' : ''}
+              </span>
+              <span className="text-jeopardy-cream/60 text-xs">
+                When ON, the host's voice reads each clue aloud via ElevenLabs
+                live (≈$0.005/clue + character usage). When OFF, only the
+                committed sound clips play. Default: OFF.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={toggleMoneyBurning}
+              disabled={busy}
+              className={`shrink-0 px-5 py-2 rounded font-bold text-sm uppercase tracking-widest transition-colors disabled:opacity-50 ${
+                settings.moneyBurningMode
+                  ? 'bg-red-600 hover:bg-red-500 text-white'
+                  : 'bg-white/10 hover:bg-white/20 text-jeopardy-cream'
+              }`}
+            >
+              {settings.moneyBurningMode ? 'ON' : 'OFF'}
+            </button>
+          </div>
         </div>
       </section>
 

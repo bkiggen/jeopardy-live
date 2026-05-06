@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type AppSettings } from '../api';
 
-const DEFAULTS: AppSettings = { moneyBurningMode: false };
+const DEFAULTS: AppSettings = {
+  moneyBurningMode: false,
+  voice: 'daniel',
+  voices: [],
+};
 
 export function useSettings() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULTS);

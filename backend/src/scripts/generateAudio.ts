@@ -2,15 +2,18 @@ import 'dotenv/config';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { VOICES } from '../lib/voices.js';
 
-// Pre-generated audio clips for the game. Run once to generate, commit the
-// resulting MP3 files in frontend/public/audio/, and the runtime never hits
-// ElevenLabs again.
+// Pre-generated audio clips for the game. Run once to generate every clip
+// for every voice in lib/voices.ts:
 //
 //   cd backend && npm run generate-audio
 //
-// You only need ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID set locally to do
-// this — production doesn't need them.
+// Files land at frontend/public/audio/<voice-id>/<clip-key>.mp3 — commit them
+// so production never hits ElevenLabs at runtime.
+//
+// You only need ELEVENLABS_API_KEY locally; voice IDs are hard-coded in
+// lib/voices.ts. Add a new voice by editing that list and re-running.
 
 type Clip = { key: string; text: string };
 
@@ -32,24 +35,25 @@ const CLIPS: Clip[] = [
 
   // Leader penalty
   { key: 'penalty', text: "That'll cost you." },
+
+  // End of game
+  {
+    key: 'goodbye',
+    text:
+      "And that's all for Jeopardy today. Thanks for playing, everyone. And remember: we've got all the points left to play for and the rest of our lives left to play. Good night.",
+  },
 ];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(__dirname, '../../../frontend/public/audio');
 
 const apiKey = process.env.ELEVENLABS_API_KEY;
-const voiceId = process.env.ELEVENLABS_VOICE_ID;
-
-if (!apiKey || !voiceId) {
-  console.error(
-    'ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID must be set in backend/.env',
-  );
+if (!apiKey) {
+  console.error('ELEVENLABS_API_KEY must be set in backend/.env');
   process.exit(1);
 }
 
-mkdirSync(OUT_DIR, { recursive: true });
-
-async function generate(clip: Clip): Promise<void> {
+async function generate(voiceId: string, clip: Clip, outPath: string): Promise<void> {
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
     {
@@ -70,18 +74,23 @@ async function generate(clip: Clip): Promise<void> {
     throw new Error(`elevenlabs ${res.status} on "${clip.key}": ${detail}`);
   }
   const buf = Buffer.from(await res.arrayBuffer());
-  const path = join(OUT_DIR, `${clip.key}.mp3`);
-  writeFileSync(path, buf);
-  console.log(`✓ ${clip.key}.mp3 (${(buf.length / 1024).toFixed(1)} KB) — "${clip.text}"`);
+  writeFileSync(outPath, buf);
+  console.log(`  ✓ ${clip.key}.mp3 (${(buf.length / 1024).toFixed(1)} KB)`);
 }
 
 async function main(): Promise<void> {
-  console.log(`Generating ${CLIPS.length} clips into ${OUT_DIR}\n`);
-  for (const clip of CLIPS) {
-    await generate(clip);
+  console.log(`Generating ${CLIPS.length} clips × ${VOICES.length} voices into ${OUT_DIR}\n`);
+  for (const voice of VOICES) {
+    const dir = join(OUT_DIR, voice.id);
+    mkdirSync(dir, { recursive: true });
+    console.log(`[${voice.label}]`);
+    for (const clip of CLIPS) {
+      await generate(voice.voiceId, clip, join(dir, `${clip.key}.mp3`));
+    }
+    console.log();
   }
   console.log(
-    `\nDone. Commit the mp3 files in frontend/public/audio/ so production doesn't need to regenerate.`,
+    `Done. Commit frontend/public/audio/ so production doesn't need to regenerate.`,
   );
 }
 

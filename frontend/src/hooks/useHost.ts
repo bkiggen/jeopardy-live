@@ -10,7 +10,8 @@ export type SoundClip =
   | 'round-complete'
   | 'correct'
   | 'incorrect'
-  | 'penalty';
+  | 'penalty'
+  | 'goodbye';
 
 const VARIANTS: Partial<Record<SoundClip, string[]>> = {
   correct: ['correct-1', 'correct-2', 'correct-3'],
@@ -25,7 +26,7 @@ function pickFile(name: SoundClip): string {
   return name;
 }
 
-export function useHost() {
+export function useHost(voice: string) {
   const { amplitude, connectAudio, stop } = useAudioAnalyzer();
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -34,9 +35,9 @@ export function useHost() {
       const file = pickFile(name);
       setIsPlaying(true);
       try {
-        const res = await fetch(`/audio/${file}.mp3`);
+        const res = await fetch(`/audio/${voice}/${file}.mp3`);
         if (!res.ok) {
-          console.warn(`audio missing: ${file}.mp3`);
+          console.warn(`audio missing: /audio/${voice}/${file}.mp3`);
           return;
         }
         const buf = await res.arrayBuffer();
@@ -47,11 +48,11 @@ export function useHost() {
         setIsPlaying(false);
       }
     },
-    [connectAudio],
+    [connectAudio, voice],
   );
 
   // Live ElevenLabs synthesis — only called when "money-burning mode" is on.
-  // Hits the passcode-gated /api/host/speak which calls ElevenLabs server-side.
+  // Server picks the voice from settings, so no voice param here.
   const speakLive = useCallback(
     async (text: string) => {
       const clean = stripHtml(text);

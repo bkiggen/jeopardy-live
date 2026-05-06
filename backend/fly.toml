@@ -1,42 +1,44 @@
-# See https://fly.io/docs/reference/configuration/
+# fly.toml app configuration file generated for standup-jeopardy on 2026-05-06T12:48:58-07:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-# REPLACE this with the app name you choose during `fly launch`.
-app = "standup-jeopardy"
-primary_region = "ord"
+app = 'standup-jeopardy'
+primary_region = 'ord'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [deploy]
-  # Apply pending Prisma migrations before the new release replaces the old.
-  release_command = "npx prisma migrate deploy"
+  release_command = 'npx prisma migrate deploy'
 
 [env]
-  # Internal listen port the app binds to. Fly maps 80/443 -> this port.
-  PORT = "8080"
-  HOST = "0.0.0.0"
+  HOST = '0.0.0.0'
+  PORT = '8080'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "off"   # WebSockets need a persistent process
+  auto_stop_machines = 'off'
   auto_start_machines = true
-  min_machines_running = 1     # keep a worker hot so sockets reconnect cleanly
-  processes = ["app"]
+  min_machines_running = 1
+  processes = ['app']
 
   [http_service.concurrency]
-    type = "connections"
-    soft_limit = 200
+    type = 'connections'
     hard_limit = 250
+    soft_limit = 200
 
-[[http_service.checks]]
-  grace_period = "10s"
-  interval = "30s"
-  method = "GET"
-  timeout = "5s"
-  path = "/health"
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/health'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 512

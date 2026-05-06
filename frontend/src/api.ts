@@ -194,6 +194,8 @@ export const api = {
 
 export type AppSettings = {
   moneyBurningMode: boolean;
+  voice: string;
+  voices: Array<{ id: string; label: string }>;
 };
 
 export type JudgeOutcome =
