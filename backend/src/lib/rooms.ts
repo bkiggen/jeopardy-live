@@ -27,6 +27,7 @@ export type ActiveClue = {
   answer: string;
   revealed: boolean;
   buzzedPlayerId: number | null;
+  buzzedAt: number | null;
   typingAnswer: string;
   lockedOutPlayerIds: number[];
   pendingJudgement: PendingJudgement | null;

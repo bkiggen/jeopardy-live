@@ -27,8 +27,29 @@ function pickFile(name: SoundClip): string {
 }
 
 export function useHost(voice: string) {
-  const { amplitude, connectAudio, stop } = useAudioAnalyzer();
+  const { amplitude, connectAudio, playTone, stop } = useAudioAnalyzer();
   const [isPlaying, setIsPlaying] = useState(false);
+
+  const playBuzz = useCallback(() => {
+    // Two short low-pitched bursts — game-show buzzer feel
+    playTone({ frequency: 180, duration: 0.18, type: 'sawtooth', volume: 0.4 });
+    setTimeout(() => {
+      playTone({ frequency: 180, duration: 0.18, type: 'sawtooth', volume: 0.4 });
+    }, 220);
+  }, [playTone]);
+
+  const playTimeUp = useCallback(() => {
+    // Three descending tones — "wah wah waaaah" sad-trumpet
+    playTone({ frequency: 440, duration: 0.18, type: 'square', volume: 0.3 });
+    setTimeout(
+      () => playTone({ frequency: 330, duration: 0.18, type: 'square', volume: 0.3 }),
+      200,
+    );
+    setTimeout(
+      () => playTone({ frequency: 220, duration: 0.45, type: 'square', volume: 0.4 }),
+      420,
+    );
+  }, [playTone]);
 
   const playClip = useCallback(
     async (name: SoundClip) => {
@@ -86,5 +107,5 @@ export function useHost(voice: string) {
     [connectAudio],
   );
 
-  return { playClip, speakLive, amplitude, isPlaying, stop };
+  return { playClip, speakLive, playBuzz, playTimeUp, amplitude, isPlaying, stop };
 }

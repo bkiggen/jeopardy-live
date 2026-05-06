@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useHostContext } from '../context/HostContext';
 import { useRoom } from '../context/RoomContext';
 import { leaderPenalty } from '../lib/penalty';
@@ -11,10 +11,52 @@ type Pending = NonNullable<
 // Renders inline inside the GameBoard panel (not a modal). The host's clue
 // content fills the same space the tile grid normally occupies, so the host
 // avatar above stays visible the whole time.
+const BUZZ_TIMEOUT_MS = 10_000;
+
 export function ClueModal() {
-  const { playClip } = useHostContext();
+  const { playClip, playBuzz, playTimeUp } = useHostContext();
   const { isHost, game, members, scores, socketId, actions } = useRoom();
   const clue = game.activeClue;
+
+  // Fire the buzzer sound on the host's machine when a player buzzes in.
+  // Players who buzzed get audio via the host's screen-share over Zoom.
+  const buzzedId = clue?.buzzedPlayerId ?? null;
+  const prevBuzzedRef = useRef<number | null>(buzzedId);
+  useEffect(() => {
+    if (
+      isHost &&
+      prevBuzzedRef.current === null &&
+      buzzedId !== null
+    ) {
+      playBuzz();
+    }
+    prevBuzzedRef.current = buzzedId;
+  }, [buzzedId, isHost, playBuzz]);
+
+  // Countdown + time-up sound
+  const buzzedAt = clue?.buzzedAt ?? null;
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const timeUpFiredRef = useRef(false);
+  useEffect(() => {
+    if (!buzzedAt) {
+      setRemainingMs(null);
+      timeUpFiredRef.current = false;
+      return;
+    }
+    timeUpFiredRef.current = false;
+    const tick = () => {
+      const elapsed = Date.now() - buzzedAt;
+      const remaining = Math.max(0, BUZZ_TIMEOUT_MS - elapsed);
+      setRemainingMs(remaining);
+      if (remaining <= 0 && !timeUpFiredRef.current) {
+        timeUpFiredRef.current = true;
+        if (isHost) playTimeUp();
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 100);
+    return () => clearInterval(interval);
+  }, [buzzedAt, isHost, playTimeUp]);
 
   const penalty = useMemo(
     () =>
@@ -97,13 +139,16 @@ export function ClueModal() {
           </p>
         )}
 
-        {isMyBuzz && !pending && <MyAnswerInput actions={actions} />}
+        {isMyBuzz && !pending && (
+          <MyAnswerInput actions={actions} remainingMs={remainingMs} />
+        )}
 
         {someoneElseBuzzed && !pending && (
           <BuzzedPanel
             name={buzzedName ?? 'Someone'}
             typing={clue.typingAnswer}
             isHost={isHost}
+            remainingMs={remainingMs}
             onCancel={() => actions.cancelBuzz()}
           />
         )}
@@ -167,7 +212,13 @@ export function ClueModal() {
   );
 }
 
-function MyAnswerInput({ actions }: { actions: ReturnType<typeof useRoom>['actions'] }) {
+function MyAnswerInput({
+  actions,
+  remainingMs,
+}: {
+  actions: ReturnType<typeof useRoom>['actions'];
+  remainingMs: number | null;
+}) {
   const [text, setText] = useState('');
 
   function update(value: string) {
@@ -184,9 +235,12 @@ function MyAnswerInput({ actions }: { actions: ReturnType<typeof useRoom>['actio
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-green-300 font-bold text-sm uppercase tracking-widest">
-        Your turn — what's your answer?
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-green-300 font-bold text-sm uppercase tracking-widest">
+          Your turn — what's your answer?
+        </p>
+        {remainingMs !== null && <Countdown ms={remainingMs} />}
+      </div>
       <div className="flex gap-2">
         <input
           type="text"
@@ -209,9 +263,23 @@ function MyAnswerInput({ actions }: { actions: ReturnType<typeof useRoom>['actio
         </button>
       </div>
       <p className="text-jeopardy-cream/40 text-xs italic">
-        Everyone sees what you type live — be quick.
+        10 seconds. Everyone sees what you type live.
       </p>
     </div>
+  );
+}
+
+function Countdown({ ms }: { ms: number }) {
+  const seconds = Math.ceil(ms / 1000);
+  const danger = ms < 3000;
+  return (
+    <span
+      className={`font-display text-2xl tracking-wider tabular-nums ${
+        danger ? 'text-red-400 animate-pulse' : 'text-jeopardy-gold'
+      }`}
+    >
+      {seconds}s
+    </span>
   );
 }
 
@@ -219,19 +287,24 @@ function BuzzedPanel({
   name,
   typing,
   isHost,
+  remainingMs,
   onCancel,
 }: {
   name: string;
   typing: string;
   isHost: boolean;
+  remainingMs: number | null;
   onCancel: () => void;
 }) {
   return (
     <div className="bg-blue-500/20 border border-blue-400/40 rounded p-3 flex items-center justify-between gap-3">
-      <div>
-        <p className="text-blue-300 font-bold text-sm uppercase tracking-widest mb-1">
-          {name} is answering
-        </p>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <p className="text-blue-300 font-bold text-sm uppercase tracking-widest">
+            {name} is answering
+          </p>
+          {remainingMs !== null && <Countdown ms={remainingMs} />}
+        </div>
         <p className="text-jeopardy-cream text-base font-mono min-h-[1.5em]">
           {typing || <span className="opacity-40">typing…</span>}
         </p>

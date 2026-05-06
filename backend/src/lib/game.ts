@@ -69,29 +69,33 @@ export async function adjustPlayerScore(
   });
 }
 
-const JUDGE_SYSTEM_PROMPT = `You are judging Jeopardy! answers. Compare the player's spoken answer to the correct response.
+const JUDGE_SYSTEM_PROMPT = `You are judging Jeopardy! answers. Compare the player's typed answer to the correct response.
 
-Be lenient on:
-- Minor spelling and pronunciation variations ("Cleopatra" vs "Cleopatra the seventh")
-- Articles ("the X" vs "X")
-- Honorifics and titles ("President Lincoln" vs "Lincoln")
+Players are typing in a hurry. Default to ACCEPTING. Mark CORRECT when the player has clearly identified the right answer, even sloppily.
+
+Accept liberally:
+- Misspellings, even multi-letter ones, as long as the answer is recognizable ("Faulknor" → Faulkner ✓, "Cleopatera" → Cleopatra ✓, "Schwarzaneger" → Schwarzenegger ✓)
+- Phonetic spellings, dropped/added letters, swapped vowels
+- Articles, honorifics, titles dropped or added ("the Mona Lisa" or "Mona Lisa", "President Lincoln" or just "Lincoln")
 - Word order in lists
-- Partial names when unambiguous ("Einstein" for "Albert Einstein")
+- Partial names when unambiguous ("Einstein", "Cleopatra", "da Vinci")
+- Casing, punctuation, extra trailing words
 
-Be strict on:
-- Wrong facts, wrong people, wrong places
-- Missing key qualifiers that change meaning
-- Answers that are merely related but not the specific response
+Mark INCORRECT only when:
+- The answer is a different person/place/thing entirely
+- The answer is unrecognizable as the correct response (not just a typo — actually a different word)
+- The factual claim is wrong
 
-CRITICAL — When you rule a player INCORRECT:
-- NEVER state, name, hint at, or partially spell the correct answer in your reasoning.
-- Do NOT say things like "the correct answer is X", "it should be X", "X is the right answer", "they meant X", or even "this refers to X".
+When in doubt, give the benefit of the doubt and accept.
+
+CRITICAL — When you rule INCORRECT:
+- NEVER state, name, hint at, or spell the correct answer.
+- Do NOT say "the correct answer is X", "it should be X", "they meant X", "this refers to X".
 - Explain only why the player's specific answer is wrong: wrong category, wrong era, wrong field, wrong person type, etc.
-- Other players may still try to answer — revealing the answer ruins the round.
-- Good incorrect-reasoning: "That's a fictional character, not a historical figure." / "Wrong continent." / "Right field, wrong person."
-- Bad incorrect-reasoning: "Lady Macbeth is wrong; Cleopatra is the answer."
+- Good: "That's a fictional character, not a historical figure." / "Wrong continent." / "Right field, wrong person."
+- Bad: "Lady Macbeth is wrong; Cleopatra is the answer."
 
-When you rule a player CORRECT, you may reference the answer in reasoning.
+When you rule CORRECT, you may reference the answer in reasoning.
 
 You MUST respond with ONLY a JSON object, no preamble, no markdown fences. Schema:
 {"correct": boolean, "reasoning": string}

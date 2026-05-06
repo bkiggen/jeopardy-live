@@ -78,6 +78,7 @@ type AppSocket = Socket<ClientToServer, ServerToClient, Record<string, never>, S
 
 const RATIO = 1.5;
 const HOST_GRACE_MS = 60_000;
+const BUZZ_TIMEOUT_MS = 10_000;
 
 export function attachSockets(httpServer: HTTPServer): Io {
   const io: Io = new Server(httpServer, {
@@ -160,9 +161,18 @@ export function attachSockets(httpServer: HTTPServer): Io {
       if (clue.pendingJudgement)
         return ack({ ok: false, error: 'judgement in progress' });
       clue.buzzedPlayerId = member.playerId;
+      clue.buzzedAt = Date.now();
       clue.typingAnswer = '';
       ack({ ok: true });
       broadcastGameState(io, room);
+
+      // Schedule timeout — if the player doesn't submit in 10s, auto-handle
+      const buzzedRoomCode = room.code;
+      const buzzedClueId = clue.id;
+      const buzzedPlayerId = member.playerId;
+      setTimeout(() => {
+        void handleBuzzTimeout(io, buzzedRoomCode, buzzedClueId, buzzedPlayerId);
+      }, BUZZ_TIMEOUT_MS);
     });
 
     socket.on('player:typing', (payload, ack) => {
@@ -463,10 +473,79 @@ function newActiveClue(clue: { id: number; value: number; question: string; answ
     answer: clue.answer,
     revealed: false,
     buzzedPlayerId: null,
+    buzzedAt: null,
     typingAnswer: '',
     lockedOutPlayerIds: [],
     pendingJudgement: null,
   };
+}
+
+async function handleBuzzTimeout(
+  io: Io,
+  roomCode: string,
+  clueId: number,
+  playerId: number,
+): Promise<void> {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+  const clue = room.game.activeClue;
+  if (!clue || clue.id !== clueId) return;
+  if (clue.buzzedPlayerId !== playerId) return; // already resolved
+  if (clue.pendingJudgement) return;
+
+  const text = clue.typingAnswer.trim();
+  if (text) {
+    // Auto-submit whatever they typed — same path as a normal submission
+    const playerName =
+      room.scores.find((s) => s.playerId === playerId)?.name ?? `Player ${playerId}`;
+    clue.pendingJudgement = {
+      playerId,
+      playerName,
+      answer: text,
+      state: 'judging',
+      reasoning: null,
+    };
+    clue.buzzedPlayerId = null;
+    clue.buzzedAt = null;
+    clue.typingAnswer = '';
+    broadcastGameState(io, room);
+
+    const outcome = await judgeAnswerServerSide(
+      stripHtml(clue.question),
+      clue.answer,
+      text,
+    );
+
+    const fresh = rooms.get(roomCode);
+    if (!fresh || fresh.game.activeClue?.id !== clueId) return;
+    const freshClue = fresh.game.activeClue;
+    if (!freshClue.pendingJudgement) return;
+
+    if (!outcome.ok) {
+      freshClue.pendingJudgement = {
+        ...freshClue.pendingJudgement,
+        state: 'incorrect',
+        reasoning: `Time ran out. Judge unavailable: ${outcome.error}.`,
+      };
+    } else {
+      freshClue.pendingJudgement = {
+        ...freshClue.pendingJudgement,
+        state: outcome.correct ? 'correct' : 'incorrect',
+        reasoning: `(Submitted on timeout) ${outcome.reasoning}`,
+      };
+    }
+    broadcastGameState(io, fresh);
+    return;
+  }
+
+  // Empty answer — lock the player out and clear the buzz
+  if (!clue.lockedOutPlayerIds.includes(playerId)) {
+    clue.lockedOutPlayerIds.push(playerId);
+  }
+  clue.buzzedPlayerId = null;
+  clue.buzzedAt = null;
+  clue.typingAnswer = '';
+  broadcastGameState(io, room);
 }
 
 function requireHost(socket: AppSocket): Room | null {
