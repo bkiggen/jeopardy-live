@@ -1,17 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { GameBoard } from '../components/GameBoard';
 import { ScoreBoard } from '../components/ScoreBoard';
 import { CharacterCanvas } from '../components/CharacterCanvas';
-import { api, type Player, type Season } from '../api';
-import { usePasscode } from '../context/PasscodeContext';
 import { RoomProvider, useRoom } from '../context/RoomContext';
-
-export type LastAdjust = {
-  playerId: number;
-  playerName: string;
-  delta: number;
-};
 
 export function Room() {
   const { code } = useParams<{ code: string }>();
@@ -40,7 +32,17 @@ function RoomShell() {
   return (
     <div className="min-h-screen flex flex-col">
       <RoomHeader code={code} isHost={isHost} status={status} memberCount={members.length} />
-      {isHost ? <HostView /> : <PlayerStub code={code} memberCount={members.length} />}
+      <main className="flex-1 grid grid-cols-[1fr_320px] gap-4 p-4">
+        <section className="flex flex-col gap-4">
+          <div className="flex justify-center">
+            <CharacterCanvas />
+          </div>
+          <GameBoard />
+        </section>
+        <aside>
+          <ScoreBoard />
+        </aside>
+      </main>
       <button
         type="button"
         onClick={() => navigate('/')}
@@ -115,101 +117,6 @@ function RoomHeader({
       </div>
     </header>
   );
-}
-
-function HostView() {
-  const { callProtected } = usePasscode();
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [, setActiveSeason] = useState<Season | null>(null);
-  const [lastAdjust, setLastAdjust] = useState<LastAdjust | null>(null);
-
-  const refreshPlayers = useCallback(async () => {
-    try {
-      setPlayers(await api.getPlayers());
-    } catch (err) {
-      console.error('failed to load players', err);
-    }
-  }, []);
-
-  const refreshSeason = useCallback(async () => {
-    try {
-      const seasons = await api.getSeasons();
-      setActiveSeason(seasons.find((s) => s.isActive) ?? null);
-    } catch (err) {
-      console.error('failed to load seasons', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshPlayers();
-    void refreshSeason();
-  }, [refreshPlayers, refreshSeason]);
-
-  const award = useCallback(
-    async (playerId: number, delta: number) => {
-      const player = players.find((p) => p.id === playerId);
-      const result = await callProtected(
-        () => api.adjustScore(playerId, delta),
-        { message: 'Enter the host passcode to award points.' },
-      );
-      if (result == null) return;
-      setLastAdjust({
-        playerId,
-        playerName: player?.name ?? `Player ${playerId}`,
-        delta,
-      });
-      await refreshPlayers();
-    },
-    [callProtected, players, refreshPlayers],
-  );
-
-  const undo = useCallback(async () => {
-    if (!lastAdjust) return;
-    const result = await callProtected(() =>
-      api.adjustScore(lastAdjust.playerId, -lastAdjust.delta),
-    );
-    if (result == null) return;
-    setLastAdjust(null);
-    await refreshPlayers();
-  }, [callProtected, lastAdjust, refreshPlayers]);
-
-  return (
-    <main className="flex-1 grid grid-cols-[1fr_320px] gap-4 p-4">
-      <section className="flex flex-col gap-4">
-        <div className="flex justify-center">
-          <CharacterCanvas />
-        </div>
-        <GameBoard players={players} award={award} />
-      </section>
-      <aside>
-        <ScoreBoard players={players} lastAdjust={lastAdjust} onUndo={undo} />
-      </aside>
-    </main>
-  );
-}
-
-function PlayerStub({ code, memberCount }: { code: string; memberCount: number }) {
-  return (
-    <main className="flex-1 flex flex-col items-center justify-center gap-6 p-6 text-center">
-      <h2 className="font-display text-jeopardy-gold text-5xl tracking-wider text-shadow-tile">
-        ROOM {code}
-      </h2>
-      <p className="text-jeopardy-cream/70 max-w-md">
-        You're in. Waiting for the host to start a round.
-      </p>
-      <p className="text-jeopardy-cream/40 text-sm">
-        {memCountLabel(memberCount)} in the room.
-      </p>
-      <p className="text-jeopardy-cream/30 text-xs italic max-w-sm">
-        Phase B: state sync, buzzers and answer entry land in Phase C/D.
-      </p>
-    </main>
-  );
-}
-
-function memCountLabel(n: number): string {
-  if (n === 1) return '1 person';
-  return `${n} people`;
 }
 
 function RoomError({ message }: { message: string }) {

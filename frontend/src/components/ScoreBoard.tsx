@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Player } from '../api';
-import type { LastAdjust } from '../App';
+import { useRoom } from '../context/RoomContext';
 import { leaderPenalty } from '../lib/penalty';
+import type { RoomScore } from '../api';
 
 type Flash = 'up' | 'down' | undefined;
 
-type Props = {
-  players: Player[];
-  lastAdjust: LastAdjust | null;
-  onUndo: () => Promise<void>;
-};
+function asPlayerLikes(scores: RoomScore[]) {
+  return scores.map((s) => ({
+    id: s.playerId,
+    name: s.name,
+    score: s.score,
+  }));
+}
 
-export function ScoreBoard({ players, lastAdjust, onUndo }: Props) {
+export function ScoreBoard() {
+  const { isHost, scores, lastAdjust, actions } = useRoom();
+  const players = asPlayerLikes(scores);
   const prev = useRef<Map<number, number>>(new Map());
   const [flash, setFlash] = useState<Map<number, Flash>>(new Map());
   const [undoing, setUndoing] = useState(false);
@@ -43,7 +47,8 @@ export function ScoreBoard({ players, lastAdjust, onUndo }: Props) {
   async function handleUndo() {
     setUndoing(true);
     try {
-      await onUndo();
+      const resp = await actions.undoScore();
+      if (!resp.ok) console.error('undo failed:', resp.error);
     } finally {
       setUndoing(false);
     }
@@ -55,7 +60,7 @@ export function ScoreBoard({ players, lastAdjust, onUndo }: Props) {
         SCORES
       </h2>
 
-      {lastAdjust && (
+      {isHost && lastAdjust && (
         <button
           type="button"
           onClick={handleUndo}

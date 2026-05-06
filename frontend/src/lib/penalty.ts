@@ -1,5 +1,3 @@
-import type { Player } from '../api';
-
 export type PenaltyState = {
   active: boolean;
   leaderId: number | null;
@@ -10,7 +8,9 @@ export type PenaltyState = {
 
 const RATIO = 1.5;
 
-export function leaderPenalty(players: Player[]): PenaltyState {
+export function leaderPenalty(
+  players: ReadonlyArray<{ id: number; score: number }>,
+): PenaltyState {
   if (players.length < 2) {
     return { active: false, leaderId: null, leaderScore: 0, runnerUpScore: 0, threshold: 0 };
   }

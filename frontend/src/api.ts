@@ -28,6 +28,46 @@ export type FinalClue = {
   answer: string;
 };
 
+export type GameClue = {
+  id: number;
+  value: number;
+  question: string;
+  answer: string;
+};
+
+export type GameRound = {
+  category: string;
+  showNumber: number;
+  type: 'single' | 'double';
+  clues: GameClue[];
+};
+
+export type ActiveClue = {
+  id: number;
+  value: number;
+  question: string;
+  answer: string;
+  revealed: boolean;
+};
+
+export type RoomScore = {
+  playerId: number;
+  name: string;
+  score: number;
+};
+
+export type RoomGameState = {
+  round: GameRound | null;
+  usedClueIds: number[];
+  activeClue: ActiveClue | null;
+};
+
+export type RoomLastAdjust = {
+  playerId: number;
+  playerName: string;
+  delta: number;
+};
+
 export type Season = {
   id: number;
   name: string;

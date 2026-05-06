@@ -1,14 +1,9 @@
-import { useMemo, useState } from 'react';
-import { judgeAnswer, type Clue, type Player } from '../api';
+import { useEffect, useMemo, useState } from 'react';
+import { judgeAnswer } from '../api';
 import { useHostContext } from '../context/HostContext';
+import { useRoom } from '../context/RoomContext';
+import { usePasscode } from '../context/PasscodeContext';
 import { leaderPenalty } from '../lib/penalty';
-
-type Props = {
-  clue: Clue;
-  players: Player[];
-  award: (playerId: number, delta: number) => Promise<void>;
-  onClose: () => void;
-};
 
 type Phase =
   | { kind: 'pick' }
@@ -22,34 +17,81 @@ type Phase =
   | { kind: 'incorrect'; playerId: number; reasoning: string }
   | { kind: 'judge_unavailable'; message: string };
 
-export function ClueModal({ clue, players, award, onClose }: Props) {
+export function ClueModal() {
   const { speak } = useHostContext();
-  const [revealed, setRevealed] = useState(false);
+  const { isHost, game, scores, actions } = useRoom();
+  const { callProtected } = usePasscode();
+  const clue = game.activeClue;
+
   const [phase, setPhase] = useState<Phase>({ kind: 'pick' });
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
   const [answerText, setAnswerText] = useState('');
   const [lockedOut, setLockedOut] = useState<Set<number>>(new Set());
 
+  // Reset when the active clue changes
+  useEffect(() => {
+    setPhase({ kind: 'pick' });
+    setSelectedPlayerId(null);
+    setAnswerText('');
+    setLockedOut(new Set());
+  }, [clue?.id]);
+
+  const players = useMemo(
+    () => scores.map((s) => ({ id: s.playerId, name: s.name, score: s.score })),
+    [scores],
+  );
   const penalty = useMemo(() => leaderPenalty(players), [players]);
   const remaining = players.filter((p) => !lockedOut.has(p.id));
 
+  if (!clue) return null;
+
+  async function close() {
+    if (!isHost) return;
+    await actions.closeClue();
+  }
+
+  async function reveal() {
+    if (!isHost) return;
+    await actions.revealAnswer();
+  }
+
+  async function award(playerId: number, delta: number) {
+    if (!isHost) return;
+    await actions.adjustScore(playerId, delta);
+    await close();
+  }
+
   async function submit() {
-    if (selectedPlayerId == null || !answerText.trim()) return;
+    if (selectedPlayerId == null || !answerText.trim() || !clue) return;
     const playerAnswer = answerText.trim();
     setPhase({ kind: 'judging', playerId: selectedPlayerId, playerAnswer });
 
-    const outcome = await judgeAnswer({
-      question: stripHtmlForDisplay(clue.question),
-      correctAnswer: clue.answer,
-      playerAnswer,
+    const outcome = await callProtected(() =>
+      judgeAnswer({
+        question: stripHtmlForDisplay(clue.question),
+        correctAnswer: clue.answer,
+        playerAnswer,
+      }).then((res) => {
+        if (res.kind === 'unavailable') throw new JudgeUnavailable(res.message);
+        return res;
+      }),
+    ).catch((err) => {
+      if (err instanceof JudgeUnavailable) {
+        return { kind: 'unavailable' as const, message: err.message };
+      }
+      throw err;
     });
 
+    if (outcome == null) {
+      setPhase({ kind: 'pick' });
+      return;
+    }
     if (outcome.kind === 'unavailable') {
       setPhase({ kind: 'judge_unavailable', message: outcome.message });
       return;
     }
     if (outcome.kind === 'correct') {
-      setRevealed(true);
+      await actions.revealAnswer();
       setPhase({
         kind: 'correct',
         playerId: selectedPlayerId,
@@ -60,7 +102,7 @@ export function ClueModal({ clue, players, award, onClose }: Props) {
       const wrongPlayerId = selectedPlayerId;
       const isPenaltyTarget = penalty.active && wrongPlayerId === penalty.leaderId;
       if (isPenaltyTarget) {
-        await award(wrongPlayerId, -clue.value);
+        await actions.adjustScore(wrongPlayerId, -clue.value);
       }
       setLockedOut((prev) => new Set(prev).add(wrongPlayerId));
       setPhase({ kind: 'incorrect', playerId: wrongPlayerId, reasoning: outcome.reasoning });
@@ -70,30 +112,20 @@ export function ClueModal({ clue, players, award, onClose }: Props) {
   async function approve() {
     if (phase.kind !== 'correct') return;
     await award(phase.playerId, clue.value);
-    onClose();
   }
 
-  function rejectCorrectRuling() {
+  async function rejectCorrectRuling() {
     if (phase.kind !== 'correct') return;
     setLockedOut((prev) => new Set(prev).add(phase.playerId));
-    resetForNextAttempt();
-  }
-
-  function resetForNextAttempt() {
     setSelectedPlayerId(null);
     setAnswerText('');
     setPhase({ kind: 'pick' });
   }
 
-  async function manualAward(playerId: number, delta: number) {
-    await award(playerId, delta);
-    onClose();
-  }
-
   return (
     <div
       className="fixed inset-0 bg-black/85 flex items-center justify-center p-6 z-50 cursor-pointer"
-      onClick={onClose}
+      onClick={isHost ? close : undefined}
       role="button"
       tabIndex={-1}
       aria-label="Close clue"
@@ -106,14 +138,16 @@ export function ClueModal({ clue, players, award, onClose }: Props) {
           <span className="font-display text-jeopardy-gold text-5xl tracking-wider">
             ${clue.value}
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close clue"
-            className="text-jeopardy-cream/60 hover:text-jeopardy-cream text-2xl"
-          >
-            ✕
-          </button>
+          {isHost && (
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Close clue"
+              className="text-jeopardy-cream/60 hover:text-jeopardy-cream text-2xl"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         <div className="flex-1 flex items-center justify-center px-8 py-12 text-center overflow-y-auto">
@@ -122,7 +156,7 @@ export function ClueModal({ clue, players, award, onClose }: Props) {
           </p>
         </div>
 
-        {revealed && (
+        {clue.revealed && (
           <div className="px-8 pb-6 text-center border-t border-jeopardy-gold/20 pt-6">
             <p className="text-jeopardy-cream/60 text-xs uppercase tracking-widest mb-2">
               Answer
@@ -133,84 +167,158 @@ export function ClueModal({ clue, players, award, onClose }: Props) {
           </div>
         )}
 
-        <div className="px-6 py-4 border-t-2 border-jeopardy-gold/40">
-          {phase.kind === 'pick' && (
-            <PickPhase
-              players={remaining}
-              allPlayers={players}
-              selectedPlayerId={selectedPlayerId}
-              setSelectedPlayerId={setSelectedPlayerId}
-              answerText={answerText}
-              setAnswerText={setAnswerText}
-              onSubmit={submit}
-              onReread={() => speak(clue.question)}
-              onNobody={onClose}
-              penalty={penalty}
-              clueValue={clue.value}
-            />
-          )}
-
-          {phase.kind === 'judging' && (
-            <p className="text-jeopardy-cream/80 italic text-center py-4">
-              Judging "{phase.playerAnswer}"…
+        {isHost ? (
+          <HostControls
+            phase={phase}
+            clueValue={clue.value}
+            players={players}
+            remaining={remaining}
+            penalty={penalty}
+            selectedPlayerId={selectedPlayerId}
+            setSelectedPlayerId={setSelectedPlayerId}
+            answerText={answerText}
+            setAnswerText={setAnswerText}
+            onSubmit={submit}
+            onApprove={approve}
+            onReject={rejectCorrectRuling}
+            onContinue={() => setPhase({ kind: 'pick' })}
+            onAward={award}
+            onClose={close}
+            onReread={() => speak(clue.question)}
+            onReveal={reveal}
+          />
+        ) : (
+          <div className="px-6 py-4 border-t-2 border-jeopardy-gold/40 text-center">
+            <p className="text-jeopardy-cream/60 italic text-sm">
+              {clue.revealed ? 'Answer revealed.' : 'Waiting for someone to answer…'}
             </p>
-          )}
-
-          {phase.kind === 'correct' && (
-            <CorrectPhase
-              playerName={players.find((p) => p.id === phase.playerId)?.name ?? '?'}
-              playerAnswer={phase.playerAnswer}
-              reasoning={phase.reasoning}
-              clueValue={clue.value}
-              onApprove={approve}
-              onReject={rejectCorrectRuling}
-            />
-          )}
-
-          {phase.kind === 'incorrect' && (
-            <IncorrectPhase
-              playerName={players.find((p) => p.id === phase.playerId)?.name ?? '?'}
-              reasoning={phase.reasoning}
-              penaltyApplied={
-                penalty.active && phase.playerId === penalty.leaderId ? clue.value : 0
-              }
-              remainingCount={remaining.length}
-              onContinue={resetForNextAttempt}
-              onNobody={onClose}
-            />
-          )}
-
-          {phase.kind === 'judge_unavailable' && (
-            <FallbackPhase
-              message={phase.message}
-              players={players}
-              clueValue={clue.value}
-              onAward={manualAward}
-              onNobody={onClose}
-            />
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+class JudgeUnavailable extends Error {}
+
+type HostControlsProps = {
+  phase: Phase;
+  clueValue: number;
+  players: { id: number; name: string; score: number }[];
+  remaining: { id: number; name: string }[];
+  penalty: ReturnType<typeof leaderPenalty>;
+  selectedPlayerId: number | null;
+  setSelectedPlayerId: (id: number) => void;
+  answerText: string;
+  setAnswerText: (s: string) => void;
+  onSubmit: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onContinue: () => void;
+  onAward: (playerId: number, delta: number) => Promise<void>;
+  onClose: () => void;
+  onReread: () => void;
+  onReveal: () => void;
+};
+
+function HostControls({
+  phase,
+  clueValue,
+  players,
+  remaining,
+  penalty,
+  selectedPlayerId,
+  setSelectedPlayerId,
+  answerText,
+  setAnswerText,
+  onSubmit,
+  onApprove,
+  onReject,
+  onContinue,
+  onAward,
+  onClose,
+  onReread,
+  onReveal,
+}: HostControlsProps) {
+  return (
+    <div className="px-6 py-4 border-t-2 border-jeopardy-gold/40">
+      {phase.kind === 'pick' && (
+        <PickPhase
+          remaining={remaining}
+          allPlayers={players}
+          selectedPlayerId={selectedPlayerId}
+          setSelectedPlayerId={setSelectedPlayerId}
+          answerText={answerText}
+          setAnswerText={setAnswerText}
+          onSubmit={onSubmit}
+          onReread={onReread}
+          onReveal={onReveal}
+          onNobody={onClose}
+          penalty={penalty}
+          clueValue={clueValue}
+        />
+      )}
+
+      {phase.kind === 'judging' && (
+        <p className="text-jeopardy-cream/80 italic text-center py-4">
+          Judging "{phase.playerAnswer}"…
+        </p>
+      )}
+
+      {phase.kind === 'correct' && (
+        <CorrectPhase
+          playerName={players.find((p) => p.id === phase.playerId)?.name ?? '?'}
+          playerAnswer={phase.playerAnswer}
+          reasoning={phase.reasoning}
+          clueValue={clueValue}
+          onApprove={onApprove}
+          onReject={onReject}
+        />
+      )}
+
+      {phase.kind === 'incorrect' && (
+        <IncorrectPhase
+          playerName={players.find((p) => p.id === phase.playerId)?.name ?? '?'}
+          reasoning={phase.reasoning}
+          penaltyApplied={
+            penalty.active && phase.playerId === penalty.leaderId ? clueValue : 0
+          }
+          remainingCount={remaining.length}
+          onContinue={onContinue}
+          onNobody={onClose}
+        />
+      )}
+
+      {phase.kind === 'judge_unavailable' && (
+        <FallbackPhase
+          message={phase.message}
+          players={players}
+          clueValue={clueValue}
+          onAward={onAward}
+          onNobody={onClose}
+        />
+      )}
+    </div>
+  );
+}
+
 type PickProps = {
-  players: Player[];
-  allPlayers: Player[];
+  remaining: { id: number; name: string }[];
+  allPlayers: { id: number; name: string }[];
   selectedPlayerId: number | null;
   setSelectedPlayerId: (id: number) => void;
   answerText: string;
   setAnswerText: (s: string) => void;
   onSubmit: () => void;
   onReread: () => void;
+  onReveal: () => void;
   onNobody: () => void;
   penalty: ReturnType<typeof leaderPenalty>;
   clueValue: number;
 };
 
 function PickPhase({
-  players,
+  remaining,
   allPlayers,
   selectedPlayerId,
   setSelectedPlayerId,
@@ -218,17 +326,18 @@ function PickPhase({
   setAnswerText,
   onSubmit,
   onReread,
+  onReveal,
   onNobody,
   penalty,
   clueValue,
 }: PickProps) {
   const submittable = selectedPlayerId != null && answerText.trim().length > 0;
-  const lockedOutCount = allPlayers.length - players.length;
+  const lockedOutCount = allPlayers.length - remaining.length;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
-        {players.map((p) => {
+        {remaining.map((p) => {
           const isLeader = penalty.active && p.id === penalty.leaderId;
           const selected = p.id === selectedPlayerId;
           return (
@@ -291,6 +400,13 @@ function PickPhase({
             className="px-3 py-1.5 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm"
           >
             ↻ Re-read
+          </button>
+          <button
+            type="button"
+            onClick={onReveal}
+            className="px-3 py-1.5 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm"
+          >
+            Reveal Answer
           </button>
           <button
             type="button"
@@ -416,7 +532,7 @@ function FallbackPhase({
   onNobody,
 }: {
   message: string;
-  players: Player[];
+  players: { id: number; name: string }[];
   clueValue: number;
   onAward: (playerId: number, delta: number) => Promise<void>;
   onNobody: () => void;

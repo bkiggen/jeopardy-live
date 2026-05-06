@@ -1,6 +1,46 @@
+export type GameClue = {
+  id: number;
+  value: number;
+  question: string;
+  answer: string;
+};
+
+export type GameRound = {
+  category: string;
+  showNumber: number;
+  type: 'single' | 'double';
+  clues: GameClue[];
+};
+
+export type ActiveClue = {
+  id: number;
+  value: number;
+  question: string;
+  answer: string;
+  revealed: boolean;
+};
+
+export type RoomScore = {
+  playerId: number;
+  name: string;
+  score: number;
+};
+
+export type RoomGameState = {
+  round: GameRound | null;
+  usedClueIds: number[];
+  activeClue: ActiveClue | null;
+};
+
+export type LastAdjust = {
+  playerId: number;
+  playerName: string;
+  delta: number;
+};
+
 type RoomMember = {
   socketId: string;
-  playerId: number | null; // null until they pick from the player list
+  playerId: number | null;
   name: string | null;
   isHost: boolean;
 };
@@ -10,6 +50,9 @@ export type Room = {
   hostSocketId: string | null;
   members: Map<string, RoomMember>;
   createdAt: number;
+  game: RoomGameState;
+  scores: RoomScore[];
+  lastAdjust: LastAdjust | null;
 };
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1
@@ -21,6 +64,10 @@ function generateCode(): string {
     out += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
   }
   return out;
+}
+
+function emptyGame(): RoomGameState {
+  return { round: null, usedClueIds: [], activeClue: null };
 }
 
 export class RoomManager {
@@ -38,6 +85,9 @@ export class RoomManager {
       hostSocketId: null,
       members: new Map(),
       createdAt: Date.now(),
+      game: emptyGame(),
+      scores: [],
+      lastAdjust: null,
     };
     this.rooms.set(code, room);
     return room;
@@ -55,7 +105,6 @@ export class RoomManager {
     return [...this.rooms.values()];
   }
 
-  // For tests
   reset(): void {
     this.rooms.clear();
   }
