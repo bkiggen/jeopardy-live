@@ -41,6 +41,10 @@ export function AdminView({ refreshPlayers }: Props) {
   const [seasonName, setSeasonName] = useState(nextQuarterName());
   const [editingTeamId, setEditingTeamId] = useState<number | null>(null);
   const [editingTeamName, setEditingTeamName] = useState('');
+  const [editingPlayerId, setEditingPlayerId] = useState<number | null>(null);
+  const [editingPlayerName, setEditingPlayerName] = useState('');
+  const [editingSeasonId, setEditingSeasonId] = useState<number | null>(null);
+  const [editingSeasonName, setEditingSeasonName] = useState('');
 
   const [openSeasonId, setOpenSeasonId] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -187,6 +191,106 @@ export function AdminView({ refreshPlayers }: Props) {
       const result = await callProtected(() => api.togglePlayer(p.id, !p.isActive));
       if (result == null) return;
       await Promise.all([refreshTeamPlayers(), refreshPlayers()]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEditingPlayer(p: Player) {
+    setEditingPlayerId(p.id);
+    setEditingPlayerName(p.name);
+  }
+  function cancelEditingPlayer() {
+    setEditingPlayerId(null);
+    setEditingPlayerName('');
+  }
+  async function savePlayerName(p: Player) {
+    const trimmed = editingPlayerName.trim();
+    if (!trimmed || trimmed === p.name) {
+      cancelEditingPlayer();
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await callProtected(() =>
+        api.updatePlayer(p.id, { name: trimmed }),
+      );
+      if (result == null) return;
+      await Promise.all([refreshTeamPlayers(), refreshPlayers()]);
+      cancelEditingPlayer();
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function deletePlayer(p: Player) {
+    if (!confirm(`Delete "${p.name}"? This wipes their season scores.`)) return;
+    setBusy(true);
+    try {
+      const result = await callProtected(() => api.deletePlayer(p.id));
+      if (result === null) return;
+      await Promise.all([refreshTeamPlayers(), refreshPlayers()]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteTeam(team: Team) {
+    if (
+      !confirm(
+        `Delete team "${team.name}"? This wipes all players and season scores for this team.`,
+      )
+    ) return;
+    setBusy(true);
+    try {
+      const result = await callProtected(() => api.deleteTeam(team.id));
+      if (result === null) return;
+      // Pick another team if the deleted one was selected.
+      if (selectedTeamId === team.id) setSelectedTeamId(null);
+      await refreshTeams();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEditingSeason(s: Season) {
+    setEditingSeasonId(s.id);
+    setEditingSeasonName(s.name);
+  }
+  function cancelEditingSeason() {
+    setEditingSeasonId(null);
+    setEditingSeasonName('');
+  }
+  async function saveSeasonName(s: Season) {
+    const trimmed = editingSeasonName.trim();
+    if (!trimmed || trimmed === s.name) {
+      cancelEditingSeason();
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await callProtected(() =>
+        api.updateSeason(s.id, { name: trimmed }),
+      );
+      if (result == null) return;
+      await refreshSeasons();
+      cancelEditingSeason();
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function deleteSeasonAt(s: Season) {
+    if (s.isActive) {
+      alert('Cannot delete the active season — start a new one first.');
+      return;
+    }
+    if (!confirm(`Delete season "${s.name}"? This wipes all scores from that season.`))
+      return;
+    setBusy(true);
+    try {
+      const result = await callProtected(() => api.deleteSeason(s.id));
+      if (result === null) return;
+      if (openSeasonId === s.id) setOpenSeasonId(null);
+      await refreshSeasons();
     } finally {
       setBusy(false);
     }
@@ -431,6 +535,15 @@ export function AdminView({ refreshPlayers }: Props) {
                       >
                         {t.isActive ? 'Deactivate' : 'Reactivate'}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteTeam(t)}
+                        disabled={busy}
+                        className="shrink-0 px-2 py-1 text-red-300/70 hover:text-red-300 text-sm disabled:opacity-50"
+                        title="Delete team"
+                      >
+                        ✕
+                      </button>
                     </>
                   )}
                 </li>
@@ -481,35 +594,91 @@ export function AdminView({ refreshPlayers }: Props) {
               <p className="text-jeopardy-cream/60 text-sm">No players on this team yet.</p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {allPlayers.map((p) => (
-                  <li
-                    key={p.id}
-                    className={`flex items-center justify-between rounded px-3 py-2 ${
-                      p.isActive ? 'bg-white/5' : 'bg-white/[0.02] opacity-60'
-                    }`}
-                  >
-                    <span className="text-jeopardy-cream font-medium">
-                      {p.name}
-                      {!p.isActive && (
-                        <span className="ml-2 text-xs uppercase tracking-wide text-jeopardy-cream/40">
-                          inactive
-                        </span>
-                      )}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => togglePlayer(p)}
-                      disabled={busy}
-                      className={`px-3 py-1 rounded text-sm disabled:opacity-50 ${
-                        p.isActive
-                          ? 'bg-red-600/40 hover:bg-red-600/70 text-white'
-                          : 'bg-green-600/40 hover:bg-green-600/70 text-white'
+                {allPlayers.map((p) => {
+                  const editing = p.id === editingPlayerId;
+                  return (
+                    <li
+                      key={p.id}
+                      className={`flex items-center justify-between gap-2 rounded px-3 py-2 ${
+                        p.isActive ? 'bg-white/5' : 'bg-white/[0.02] opacity-60'
                       }`}
                     >
-                      {p.isActive ? 'Deactivate' : 'Reactivate'}
-                    </button>
-                  </li>
-                ))}
+                      {editing ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void savePlayerName(p);
+                          }}
+                          className="flex-1 flex items-center gap-2 min-w-0"
+                        >
+                          <input
+                            type="text"
+                            value={editingPlayerName}
+                            onChange={(e) => setEditingPlayerName(e.target.value)}
+                            autoFocus
+                            maxLength={100}
+                            className="min-w-0 flex-1 px-2 py-1 rounded bg-white/10 text-jeopardy-cream border border-jeopardy-gold/30"
+                          />
+                          <button
+                            type="submit"
+                            disabled={busy}
+                            className="shrink-0 px-3 py-1 bg-jeopardy-gold text-jeopardy-navy-deep rounded text-sm font-bold disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditingPlayer}
+                            className="shrink-0 px-3 py-1 bg-white/10 text-jeopardy-cream rounded text-sm hover:bg-white/20"
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <span className="text-jeopardy-cream font-medium flex-1 min-w-0 truncate">
+                            {p.name}
+                            {!p.isActive && (
+                              <span className="ml-2 text-xs uppercase tracking-wide text-jeopardy-cream/40">
+                                inactive
+                              </span>
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => startEditingPlayer(p)}
+                            disabled={busy}
+                            className="shrink-0 px-2 py-1 text-jeopardy-cream/60 hover:text-jeopardy-cream text-sm"
+                            title="Rename player"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => togglePlayer(p)}
+                            disabled={busy}
+                            className={`shrink-0 px-3 py-1 rounded text-sm disabled:opacity-50 ${
+                              p.isActive
+                                ? 'bg-red-600/40 hover:bg-red-600/70 text-white'
+                                : 'bg-green-600/40 hover:bg-green-600/70 text-white'
+                            }`}
+                          >
+                            {p.isActive ? 'Deactivate' : 'Reactivate'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deletePlayer(p)}
+                            disabled={busy}
+                            className="shrink-0 px-2 py-1 text-red-300/70 hover:text-red-300 text-sm disabled:opacity-50"
+                            title="Delete player"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </>
@@ -546,25 +715,80 @@ export function AdminView({ refreshPlayers }: Props) {
           <p className="text-jeopardy-cream/60 text-sm">No seasons.</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {seasons.map((s) => (
+            {seasons.map((s) => {
+              const editing = s.id === editingSeasonId;
+              return (
               <li key={s.id} className="bg-white/5 rounded">
-                <button
-                  type="button"
-                  onClick={() => viewSeason(s.id)}
-                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/10 rounded"
-                >
-                  <span className="text-jeopardy-cream font-medium">
-                    {s.name}
-                    {s.isActive && (
-                      <span className="ml-2 text-xs uppercase tracking-wide text-jeopardy-gold">
-                        active
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-jeopardy-cream/50 text-sm">
-                    {openSeasonId === s.id ? '▼' : '▸'}
-                  </span>
-                </button>
+                {editing ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void saveSeasonName(s);
+                    }}
+                    className="flex items-center gap-2 px-3 py-2"
+                  >
+                    <input
+                      type="text"
+                      value={editingSeasonName}
+                      onChange={(e) => setEditingSeasonName(e.target.value)}
+                      autoFocus
+                      maxLength={20}
+                      className="min-w-0 flex-1 px-2 py-1 rounded bg-white/10 text-jeopardy-cream border border-jeopardy-gold/30"
+                    />
+                    <button
+                      type="submit"
+                      disabled={busy}
+                      className="shrink-0 px-3 py-1 bg-jeopardy-gold text-jeopardy-navy-deep rounded text-sm font-bold disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEditingSeason}
+                      className="shrink-0 px-3 py-1 bg-white/10 text-jeopardy-cream rounded text-sm hover:bg-white/20"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                <div className="flex items-center gap-1 hover:bg-white/10 rounded">
+                  <button
+                    type="button"
+                    onClick={() => viewSeason(s.id)}
+                    className="flex-1 flex items-center justify-between px-3 py-2 text-left min-w-0"
+                  >
+                    <span className="text-jeopardy-cream font-medium truncate">
+                      {s.name}
+                      {s.isActive && (
+                        <span className="ml-2 text-xs uppercase tracking-wide text-jeopardy-gold">
+                          active
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-jeopardy-cream/50 text-sm shrink-0">
+                      {openSeasonId === s.id ? '▼' : '▸'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startEditingSeason(s)}
+                    disabled={busy}
+                    className="shrink-0 px-2 py-2 text-jeopardy-cream/60 hover:text-jeopardy-cream text-sm"
+                    title="Rename season"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteSeasonAt(s)}
+                    disabled={busy || s.isActive}
+                    className="shrink-0 px-2 py-2 text-red-300/70 hover:text-red-300 text-sm disabled:opacity-30"
+                    title={s.isActive ? 'Active season — cannot delete' : 'Delete season'}
+                  >
+                    ✕
+                  </button>
+                </div>
+                )}
                 {openSeasonId === s.id && (
                   <div className="px-3 pb-3 border-t border-jeopardy-gold/10">
                     <p className="text-jeopardy-cream/40 text-xs uppercase tracking-widest pt-2">
@@ -600,7 +824,8 @@ export function AdminView({ refreshPlayers }: Props) {
                   </div>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>

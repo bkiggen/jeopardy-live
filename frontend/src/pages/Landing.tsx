@@ -24,6 +24,15 @@ export function Landing() {
 
   useEffect(() => {
     void refreshTeams();
+    // Re-poll periodically so the Host button stays in sync with whether
+    // another tab/user has already claimed host on a given team.
+    const t = setInterval(() => void refreshTeams(), 5000);
+    const onFocus = () => void refreshTeams();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [refreshTeams]);
 
   async function host(team: Team) {
@@ -124,10 +133,11 @@ export function Landing() {
                   <button
                     type="button"
                     onClick={() => host(team)}
-                    disabled={busy}
-                    className="px-4 py-1.5 bg-jeopardy-gold hover:bg-jeopardy-cream text-jeopardy-navy-deep rounded text-sm font-bold disabled:opacity-50"
+                    disabled={busy || team.hasHost}
+                    title={team.hasHost ? 'Someone is already hosting this game' : undefined}
+                    className="px-4 py-1.5 bg-jeopardy-gold hover:bg-jeopardy-cream text-jeopardy-navy-deep rounded text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Host
+                    {team.hasHost ? 'Hosted' : 'Host'}
                   </button>
                 </div>
               </li>

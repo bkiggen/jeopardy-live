@@ -2,17 +2,25 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { requirePasscode } from '../lib/passcode.js';
 import { reserveUniqueCode } from '../lib/teams.js';
+import { rooms } from '../lib/rooms.js';
 
 const router = Router();
 
 // GET /api/teams — open; landing page lists these so hosts can pick one.
+// Includes hasHost: true when a host is actively connected to that team's
+// live room, so the UI can grey out the Host button.
 router.get('/', async (_req, res) => {
   const teams = await prisma.team.findMany({
     where: { isActive: true },
     orderBy: { name: 'asc' },
     select: { id: true, name: true, code: true, isActive: true },
   });
-  res.json(teams);
+  res.json(
+    teams.map((t) => ({
+      ...t,
+      hasHost: Boolean(rooms.get(t.code)?.hostSocketId),
+    })),
+  );
 });
 
 // GET /api/teams/:code — fetch a single team by its room code.
@@ -142,6 +150,28 @@ router.patch('/:id', requirePasscode, async (req, res) => {
   }
   const team = await prisma.team.update({ where: { id }, data });
   res.json(team);
+});
+
+// DELETE /api/teams/:id — wipes the team, its players, and all season scores.
+// Tears down any in-memory live room with the same code.
+router.delete('/:id', requirePasscode, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'invalid team id' });
+    return;
+  }
+  const team = await prisma.team.findUnique({ where: { id } });
+  if (!team) {
+    res.status(404).json({ error: 'team not found' });
+    return;
+  }
+  await prisma.$transaction([
+    prisma.seasonScore.deleteMany({ where: { teamId: id } }),
+    prisma.player.deleteMany({ where: { teamId: id } }),
+    prisma.team.delete({ where: { id } }),
+  ]);
+  rooms.delete(team.code);
+  res.status(204).end();
 });
 
 export default router;

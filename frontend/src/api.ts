@@ -5,6 +5,7 @@ export type Team = {
   name: string;
   code: string;
   isActive: boolean;
+  hasHost?: boolean;
 };
 
 export type Player = {
@@ -153,6 +154,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const text = await res.text().catch(() => '');
     throw new Error(`${path} -> ${res.status}: ${text}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -169,6 +171,8 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(patch),
     }),
+  deleteTeam: (id: number) =>
+    request<void>(`/api/teams/${id}`, { method: 'DELETE' }),
   selfJoinPlayer: (teamCode: string, name: string) =>
     request<Player>(`/api/teams/${encodeURIComponent(teamCode)}/players`, {
       method: 'POST',
@@ -189,6 +193,13 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ isActive }),
     }),
+  updatePlayer: (id: number, patch: { name?: string; isActive?: boolean }) =>
+    request<Player>(`/api/players/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  deletePlayer: (id: number) =>
+    request<void>(`/api/players/${id}`, { method: 'DELETE' }),
   adjustScore: (playerId: number, teamId: number, delta: number) =>
     request<{ playerId: number; seasonId: number; teamId: number; totalScore: number }>(
       '/api/scores/adjust',
@@ -205,6 +216,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(name ? { name } : {}),
     }),
+  updateSeason: (id: number, patch: { name: string }) =>
+    request<Season>(`/api/seasons/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  deleteSeason: (id: number) =>
+    request<void>(`/api/seasons/${id}`, { method: 'DELETE' }),
   judge: (input: { question: string; correctAnswer: string; playerAnswer: string }) =>
     request<{ correct: boolean; reasoning: string }>('/api/judge', {
       method: 'POST',

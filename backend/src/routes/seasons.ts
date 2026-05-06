@@ -61,6 +61,51 @@ router.post('/', requirePasscode, async (req, res) => {
   res.status(201).json(season);
 });
 
+// PATCH /api/seasons/:id — rename a season.
+router.patch('/:id', requirePasscode, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'invalid season id' });
+    return;
+  }
+  const { name } = req.body as { name?: string };
+  if (typeof name !== 'string' || !name.trim()) {
+    res.status(400).json({ error: 'name is required' });
+    return;
+  }
+  const season = await prisma.season.update({
+    where: { id },
+    data: { name: name.trim().slice(0, 20) },
+  });
+  res.json(season);
+});
+
+// DELETE /api/seasons/:id — wipes the season and its scores. Refuses to
+// delete the active season (start a new one first to avoid breaking play).
+router.delete('/:id', requirePasscode, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'invalid season id' });
+    return;
+  }
+  const season = await prisma.season.findUnique({ where: { id } });
+  if (!season) {
+    res.status(404).json({ error: 'season not found' });
+    return;
+  }
+  if (season.isActive) {
+    res
+      .status(409)
+      .json({ error: 'cannot delete the active season — start a new season first' });
+    return;
+  }
+  await prisma.$transaction([
+    prisma.seasonScore.deleteMany({ where: { seasonId: id } }),
+    prisma.season.delete({ where: { id } }),
+  ]);
+  res.status(204).end();
+});
+
 async function resolveTeamId(query: Record<string, unknown>): Promise<number | null> {
   if (typeof query.teamId === 'string') {
     const id = Number.parseInt(query.teamId, 10);

@@ -82,7 +82,7 @@ router.post('/', requirePasscode, async (req, res) => {
   });
 });
 
-// PATCH /api/players/:id — toggle isActive
+// PATCH /api/players/:id — rename and/or toggle isActive
 router.patch('/:id', requirePasscode, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
@@ -90,17 +90,31 @@ router.patch('/:id', requirePasscode, async (req, res) => {
     return;
   }
 
-  const { isActive } = req.body as { isActive?: boolean };
-  if (typeof isActive !== 'boolean') {
-    res.status(400).json({ error: 'isActive (boolean) is required' });
+  const { isActive, name } = req.body as { isActive?: boolean; name?: string };
+  const data: { isActive?: boolean; name?: string } = {};
+  if (typeof isActive === 'boolean') data.isActive = isActive;
+  if (typeof name === 'string' && name.trim()) data.name = name.trim().slice(0, 100);
+  if (Object.keys(data).length === 0) {
+    res.status(400).json({ error: 'nothing to update' });
     return;
   }
 
-  const player = await prisma.player.update({
-    where: { id },
-    data: { isActive },
-  });
+  const player = await prisma.player.update({ where: { id }, data });
   res.json(player);
+});
+
+// DELETE /api/players/:id — wipes the player and their season scores.
+router.delete('/:id', requirePasscode, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'invalid player id' });
+    return;
+  }
+  await prisma.$transaction([
+    prisma.seasonScore.deleteMany({ where: { playerId: id } }),
+    prisma.player.delete({ where: { id } }),
+  ]);
+  res.status(204).end();
 });
 
 async function resolveTeamId(query: Record<string, unknown>): Promise<number | null> {
