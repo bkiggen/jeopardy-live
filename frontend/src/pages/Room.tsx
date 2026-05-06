@@ -4,6 +4,8 @@ import { GameBoard } from '../components/GameBoard';
 import { ScoreBoard } from '../components/ScoreBoard';
 import { CharacterCanvas } from '../components/CharacterCanvas';
 import { PlayerIdentityPrompt } from '../components/PlayerIdentityPrompt';
+import { HostAwayBanner } from '../components/HostAwayBanner';
+import { MembershipToasts } from '../components/MembershipToasts';
 import { RoomProvider, useRoom } from '../context/RoomContext';
 
 export function Room() {
@@ -33,6 +35,7 @@ function RoomShell() {
   return (
     <div className="min-h-screen flex flex-col">
       <RoomHeader code={code} isHost={isHost} status={status} memberCount={members.length} />
+      <HostAwayBanner />
       <main className="flex-1 grid grid-cols-[1fr_320px] gap-4 p-4">
         <section className="flex flex-col gap-4">
           <div className="flex justify-center">
@@ -45,6 +48,7 @@ function RoomShell() {
         </aside>
       </main>
       <PlayerIdentityPrompt />
+      <MembershipToasts />
       <button
         type="button"
         onClick={() => navigate('/')}

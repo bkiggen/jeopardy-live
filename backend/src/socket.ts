@@ -27,6 +27,8 @@ type RoomStatePayload = {
     isHost: boolean;
     playerId: number | null;
   }>;
+  hostConnected: boolean;
+  hostDisconnectedAt: number | null;
 };
 
 type GameStatePayload = {
@@ -74,6 +76,7 @@ type Io = Server<ClientToServer, ServerToClient, Record<string, never>, SocketDa
 type AppSocket = Socket<ClientToServer, ServerToClient, Record<string, never>, SocketData>;
 
 const RATIO = 1.5;
+const HOST_GRACE_MS = 60_000;
 
 export function attachSockets(httpServer: HTTPServer): Io {
   const io: Io = new Server(httpServer, {
@@ -97,6 +100,12 @@ export function attachSockets(httpServer: HTTPServer): Io {
           return ack({ ok: false, error: 'room already has a host' });
         room.hostSocketId = socket.id;
         socket.data.isHost = true;
+        // Cancel any pending grace-period deletion if host reconnected
+        if (room.hostGraceTimer) {
+          clearTimeout(room.hostGraceTimer);
+          room.hostGraceTimer = null;
+        }
+        room.hostDisconnectedAt = null;
       }
 
       room.members.set(socket.id, {
@@ -426,8 +435,16 @@ export function attachSockets(httpServer: HTTPServer): Io {
         broadcastGameState(io, room);
       }
       if (room.hostSocketId === socket.id) {
-        io.to(room.code).emit('room:closed');
-        rooms.delete(room.code);
+        // Start a grace period instead of closing immediately
+        room.hostSocketId = null;
+        room.hostDisconnectedAt = Date.now();
+        room.hostGraceTimer = setTimeout(() => {
+          const stillThere = rooms.get(room.code);
+          if (!stillThere || stillThere.hostSocketId !== null) return;
+          io.to(room.code).emit('room:closed');
+          rooms.delete(room.code);
+        }, HOST_GRACE_MS);
+        broadcastRoomState(io, room.code);
         return;
       }
       broadcastRoomState(io, room.code);
@@ -472,6 +489,8 @@ function broadcastRoomState(io: Io, code: string): void {
       isHost: m.isHost,
       playerId: m.playerId,
     })),
+    hostConnected: room.hostSocketId !== null,
+    hostDisconnectedAt: room.hostDisconnectedAt,
   });
 }
 

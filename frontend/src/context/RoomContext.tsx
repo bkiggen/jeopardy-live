@@ -56,7 +56,11 @@ type RoomContextValue = {
   lastAdjust: RoomLastAdjust | null;
   actions: RoomActions;
   socketId: string | null;
+  hostConnected: boolean;
+  hostDisconnectedAt: number | null;
 };
+
+const PLAYER_ID_KEY = (code: string) => `jeopardy:room:${code}:playerId`;
 
 const emptyGame: RoomGameState = {
   round: null,
@@ -80,6 +84,8 @@ export function RoomProvider({ code, isHost, children }: Props) {
   const [scores, setScores] = useState<RoomScore[]>([]);
   const [lastAdjust, setLastAdjust] = useState<RoomLastAdjust | null>(null);
   const [socketId, setSocketId] = useState<string | null>(null);
+  const [hostConnected, setHostConnected] = useState<boolean>(true);
+  const [hostDisconnectedAt, setHostDisconnectedAt] = useState<number | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -96,6 +102,30 @@ export function RoomProvider({ code, isHost, children }: Props) {
         if (resp.ok) {
           setStatus('connected');
           setErrorMessage(null);
+          // Auto-reclaim a previously chosen player identity on reconnect
+          if (!isHost) {
+            try {
+              const stored = localStorage.getItem(PLAYER_ID_KEY(code));
+              const storedId = stored ? Number(stored) : NaN;
+              if (Number.isFinite(storedId)) {
+                s.emit(
+                  'player:identify',
+                  { playerId: storedId },
+                  (idResp: AckResponse) => {
+                    if (!idResp.ok) {
+                      try {
+                        localStorage.removeItem(PLAYER_ID_KEY(code));
+                      } catch {
+                        // ignore
+                      }
+                    }
+                  },
+                );
+              }
+            } catch {
+              // ignore storage errors
+            }
+          }
         } else {
           setStatus('error');
           setErrorMessage(resp.error ?? 'failed to join room');
@@ -108,9 +138,18 @@ export function RoomProvider({ code, isHost, children }: Props) {
       setStatus('error');
       setErrorMessage(err.message);
     });
-    s.on('room:state', (payload: { members: RoomMemberView[] }) => {
-      setMembers(payload.members);
-    });
+    s.on(
+      'room:state',
+      (payload: {
+        members: RoomMemberView[];
+        hostConnected: boolean;
+        hostDisconnectedAt: number | null;
+      }) => {
+        setMembers(payload.members);
+        setHostConnected(payload.hostConnected);
+        setHostDisconnectedAt(payload.hostDisconnectedAt);
+      },
+    );
     s.on(
       'game:state',
       (payload: {
@@ -149,6 +188,18 @@ export function RoomProvider({ code, isHost, children }: Props) {
         }
       });
     }
+    // eslint-disable-next-line @typescript-eslint/no-shadow
+    async function identifyPlayer(playerId: number): Promise<AckResponse> {
+      const resp = await emit('player:identify', { playerId });
+      if (resp.ok) {
+        try {
+          localStorage.setItem(PLAYER_ID_KEY(code), String(playerId));
+        } catch {
+          // ignore
+        }
+      }
+      return resp;
+    }
     return {
       startRound: (type) => emit('host:start_round', { type }),
       revealClue: (clueId) => emit('host:reveal_clue', { clueId }),
@@ -161,12 +212,13 @@ export function RoomProvider({ code, isHost, children }: Props) {
       ruleCorrect: () => emit('host:rule_correct'),
       ruleIncorrect: () => emit('host:rule_incorrect'),
       cancelBuzz: () => emit('host:cancel_buzz'),
-      identifyPlayer: (playerId) => emit('player:identify', { playerId }),
+      identifyPlayer,
       buzz: () => emit('player:buzz'),
       typing: (text) => emit('player:typing', { text }),
       submit: (text) => emit('player:submit', { text }),
     };
-  }, []);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [code]);
 
   const value = useMemo<RoomContextValue>(
     () => ({
@@ -180,8 +232,23 @@ export function RoomProvider({ code, isHost, children }: Props) {
       lastAdjust,
       actions,
       socketId,
+      hostConnected,
+      hostDisconnectedAt,
     }),
-    [code, isHost, status, errorMessage, members, game, scores, lastAdjust, actions, socketId],
+    [
+      code,
+      isHost,
+      status,
+      errorMessage,
+      members,
+      game,
+      scores,
+      lastAdjust,
+      actions,
+      socketId,
+      hostConnected,
+      hostDisconnectedAt,
+    ],
   );
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;

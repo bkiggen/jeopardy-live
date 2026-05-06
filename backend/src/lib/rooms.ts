@@ -65,6 +65,8 @@ export type Room = {
   game: RoomGameState;
   scores: RoomScore[];
   lastAdjust: LastAdjust | null;
+  hostDisconnectedAt: number | null;
+  hostGraceTimer: ReturnType<typeof setTimeout> | null;
 };
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1
@@ -100,6 +102,8 @@ export class RoomManager {
       game: emptyGame(),
       scores: [],
       lastAdjust: null,
+      hostDisconnectedAt: null,
+      hostGraceTimer: null,
     };
     this.rooms.set(code, room);
     return room;
