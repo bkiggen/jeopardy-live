@@ -25,46 +25,52 @@ export function ClueModal({ clue, players, award, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
-      <div className="bg-jeopardy-navy rounded-lg p-8 max-w-3xl w-full border-2 border-jeopardy-gold/40 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-jeopardy-gold text-3xl font-bold">
+    <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-6 z-50">
+      <div className="bg-jeopardy-navy rounded-lg w-full max-w-5xl border-4 border-jeopardy-gold/60 shadow-2xl animate-clue-in flex flex-col max-h-[92vh]">
+        <div className="flex items-center justify-between px-6 py-3 border-b-2 border-jeopardy-gold/40">
+          <span className="font-display text-jeopardy-gold text-5xl tracking-wider">
             ${clue.value}
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="text-jeopardy-cream/60 hover:text-jeopardy-cream"
+            aria-label="Close clue"
+            className="text-jeopardy-cream/60 hover:text-jeopardy-cream text-2xl"
           >
             ✕
           </button>
         </div>
 
-        <p className="text-jeopardy-cream text-2xl leading-relaxed mb-6">
-          {stripHtmlForDisplay(clue.question)}
-        </p>
+        <div className="flex-1 flex items-center justify-center px-8 py-12 text-center overflow-y-auto">
+          <p className="font-display text-white text-shadow-clue uppercase leading-tight tracking-wide text-3xl sm:text-5xl md:text-6xl">
+            {stripHtmlForDisplay(clue.question)}
+          </p>
+        </div>
 
         {revealed && (
-          <p className="text-jeopardy-gold text-2xl font-bold mb-6">
-            {clue.answer}
-          </p>
+          <div className="px-8 pb-6 text-center border-t border-jeopardy-gold/20 pt-6">
+            <p className="text-jeopardy-cream/60 text-xs uppercase tracking-widest mb-2">
+              Answer
+            </p>
+            <p className="font-display text-jeopardy-gold text-4xl uppercase tracking-wide">
+              {clue.answer}
+            </p>
+          </div>
         )}
 
-        <div className="flex flex-wrap gap-2 mb-6">
-          {!revealed && (
-            <button
-              type="button"
-              onClick={() => speak(clue.question)}
-              className="px-4 py-2 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20"
-            >
-              ↻ Re-read
-            </button>
-          )}
+        <div className="px-6 py-4 border-t-2 border-jeopardy-gold/40 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => speak(clue.question)}
+            className="px-3 py-2 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm"
+          >
+            ↻ Re-read
+          </button>
           {!revealed ? (
             <button
               type="button"
               onClick={() => setRevealed(true)}
-              className="px-4 py-2 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold hover:bg-jeopardy-gold/80"
+              className="ml-auto px-5 py-2 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold hover:bg-jeopardy-gold/80"
             >
               Reveal Answer
             </button>
@@ -72,28 +78,28 @@ export function ClueModal({ clue, players, award, onClose }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold hover:bg-jeopardy-gold/80"
+              className="ml-auto px-5 py-2 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm"
             >
-              Skip — Nobody
+              Skip — nobody got it
             </button>
           )}
         </div>
 
         {revealed && players.length > 0 && (
-          <div className="border-t border-jeopardy-gold/20 pt-4">
-            <p className="text-jeopardy-cream/70 text-sm mb-3">
-              Award points (closes after each):
+          <div className="px-6 pb-5 border-t border-jeopardy-gold/20 pt-4">
+            <p className="text-jeopardy-cream/60 text-xs uppercase tracking-widest mb-3">
+              Award points
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {players.map((p) => (
                 <div
                   key={p.id}
                   className="flex items-center justify-between bg-white/5 rounded px-3 py-2"
                 >
-                  <span className="text-jeopardy-cream font-medium">
+                  <span className="text-jeopardy-cream font-medium truncate">
                     {p.name}
                   </span>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 shrink-0">
                     <button
                       type="button"
                       disabled={scoringId !== null}

@@ -46,14 +46,16 @@ export function GameBoard({ players, award }: Props) {
 
   if (!round) {
     return (
-      <div className="flex-1 rounded-lg bg-jeopardy-navy p-8 flex flex-col items-center justify-center gap-6">
-        <h2 className="text-jeopardy-gold text-3xl font-bold">START A ROUND</h2>
-        <div className="flex gap-3">
+      <div className="flex-1 rounded-lg bg-jeopardy-navy p-12 flex flex-col items-center justify-center gap-8 border-2 border-jeopardy-gold/30">
+        <h2 className="font-display text-jeopardy-gold text-6xl tracking-wider text-shadow-tile">
+          START A ROUND
+        </h2>
+        <div className="flex gap-4">
           <button
             type="button"
             onClick={() => startRound('single')}
             disabled={loading}
-            className="px-6 py-3 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold hover:bg-jeopardy-gold/80 disabled:opacity-50"
+            className="px-8 py-4 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-display text-2xl tracking-wide hover:bg-jeopardy-cream disabled:opacity-50 transition-colors"
           >
             Single Jeopardy
           </button>
@@ -61,40 +63,61 @@ export function GameBoard({ players, award }: Props) {
             type="button"
             onClick={() => startRound('double')}
             disabled={loading}
-            className="px-6 py-3 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold hover:bg-jeopardy-gold/80 disabled:opacity-50"
+            className="px-8 py-4 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-display text-2xl tracking-wide hover:bg-jeopardy-cream disabled:opacity-50 transition-colors"
           >
             Double Jeopardy
           </button>
         </div>
-        {loading && <p className="text-jeopardy-cream/60">Drawing a category…</p>}
+        {loading && (
+          <p className="text-jeopardy-cream/60 italic">Drawing a category…</p>
+        )}
       </div>
     );
   }
 
   if (allDone) {
+    const ranking = [...players].sort((a, b) => b.score - a.score);
+    const winner = ranking[0];
     return (
-      <div className="flex-1 rounded-lg bg-jeopardy-navy p-8 flex flex-col items-center justify-center gap-6">
-        <h2 className="text-jeopardy-gold text-3xl font-bold">ROUND COMPLETE</h2>
-        <p className="text-jeopardy-cream/80">{round.category}</p>
+      <div className="flex-1 rounded-lg bg-jeopardy-navy p-12 flex flex-col items-center justify-center gap-8 border-2 border-jeopardy-gold/30">
+        <h2 className="font-display text-jeopardy-gold text-6xl tracking-wider text-shadow-tile">
+          ROUND COMPLETE
+        </h2>
+        <p className="text-jeopardy-cream/80 uppercase tracking-widest">
+          {round.category}
+        </p>
+        {winner && players.length > 0 && (
+          <div className="text-center">
+            <p className="text-jeopardy-cream/60 text-sm uppercase tracking-widest mb-1">
+              Leading
+            </p>
+            <p className="font-display text-white text-5xl tracking-wide text-shadow-clue">
+              {winner.name}
+            </p>
+            <p className="font-display text-jeopardy-gold text-4xl mt-2">
+              ${winner.score.toLocaleString()}
+            </p>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => setRound(null)}
-          className="px-6 py-3 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold hover:bg-jeopardy-gold/80"
+          className="px-8 py-4 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-display text-2xl tracking-wide hover:bg-jeopardy-cream transition-colors"
         >
-            Start New Round
+          Start New Round
         </button>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 rounded-lg bg-jeopardy-navy p-6 flex flex-col gap-4">
+    <div className="flex-1 rounded-lg bg-jeopardy-navy p-6 flex flex-col gap-4 border-2 border-jeopardy-gold/30">
       <div className="flex items-center justify-between">
-        <h2 className="text-jeopardy-gold text-2xl font-bold uppercase tracking-wide">
+        <h2 className="font-display text-jeopardy-gold text-4xl tracking-wider uppercase text-shadow-tile">
           {round.category}
         </h2>
-        <span className="text-jeopardy-cream/50 text-sm">
-          {round.round === 'single' ? 'Single' : 'Double'} Jeopardy · show #
+        <span className="text-jeopardy-cream/40 text-xs uppercase tracking-widest">
+          {round.round === 'single' ? 'Single' : 'Double'} · show #
           {round.showNumber}
         </span>
       </div>
@@ -108,13 +131,13 @@ export function GameBoard({ players, award }: Props) {
               key={c.id}
               disabled={used}
               onClick={() => pickClue(c)}
-              className={`rounded-lg text-jeopardy-gold font-display text-4xl py-12 transition-all ${
+              className={`rounded-lg font-display tracking-wider py-12 transition-all duration-150 ${
                 used
-                  ? 'bg-jeopardy-navy-deep/40 text-jeopardy-cream/20 cursor-not-allowed'
-                  : 'bg-jeopardy-navy-deep hover:bg-blue-900 hover:scale-105 cursor-pointer'
+                  ? 'bg-jeopardy-navy-darker/60 text-transparent cursor-not-allowed'
+                  : 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile hover:bg-blue-700 hover:scale-[1.03] active:scale-95 cursor-pointer shadow-inner'
               }`}
             >
-              {used ? '' : `$${c.value}`}
+              {used ? '·' : `$${c.value}`}
             </button>
           );
         })}

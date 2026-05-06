@@ -2,7 +2,8 @@
 
 @theme {
   --color-jeopardy-navy: #060ce9;
-  --color-jeopardy-navy-deep: #0a0f5c;
+  --color-jeopardy-navy-deep: #060c9c;
+  --color-jeopardy-navy-darker: #03062f;
   --color-jeopardy-gold: #d69f4c;
   --color-jeopardy-cream: #f5e9c4;
   --font-display: "Anton", "Impact", system-ui, sans-serif;
@@ -14,7 +15,34 @@ html, body, #root {
 
 body {
   margin: 0;
-  background: var(--color-jeopardy-navy-deep);
+  background: var(--color-jeopardy-navy-darker);
   color: white;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.text-shadow-clue {
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6), 4px 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.text-shadow-tile {
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6), 0 0 16px rgba(214, 159, 76, 0.3);
+}
+
+@keyframes tilePop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.animate-tile-pop {
+  animation: tilePop 200ms ease-out;
+}
+
+@keyframes clueIn {
+  0% { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-clue-in {
+  animation: clueIn 220ms ease-out;
 }

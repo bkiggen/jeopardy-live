@@ -47,21 +47,23 @@ export function ScoreBoard({ players, lastAdjust, onUndo }: Props) {
   }
 
   return (
-    <div className="rounded-lg bg-jeopardy-navy p-4 h-full flex flex-col gap-3">
-      <h2 className="text-jeopardy-gold text-lg font-bold">SCORES</h2>
+    <div className="rounded-lg bg-jeopardy-navy p-4 h-full flex flex-col gap-3 border-2 border-jeopardy-gold/30">
+      <h2 className="font-display text-jeopardy-gold text-2xl tracking-widest text-shadow-tile">
+        SCORES
+      </h2>
 
       {lastAdjust && (
         <button
           type="button"
           onClick={handleUndo}
           disabled={undoing}
-          className="text-sm px-3 py-2 bg-white/10 hover:bg-white/20 text-jeopardy-cream rounded flex items-center justify-between disabled:opacity-50"
+          className="text-sm px-3 py-2 bg-white/10 hover:bg-white/20 text-jeopardy-cream rounded flex items-center justify-between disabled:opacity-50 transition-colors"
         >
-          <span>↶ Undo</span>
-          <span className="text-jeopardy-cream/70">
+          <span className="font-bold">↶ Undo</span>
+          <span className="text-jeopardy-cream/70 text-xs">
             {lastAdjust.delta >= 0 ? '+' : '−'}$
-            {Math.abs(lastAdjust.delta).toLocaleString()} {lastAdjust.delta >= 0 ? 'to' : 'from'}{' '}
-            {lastAdjust.playerName}
+            {Math.abs(lastAdjust.delta).toLocaleString()}{' '}
+            {lastAdjust.delta >= 0 ? 'to' : 'from'} {lastAdjust.playerName}
           </span>
         </button>
       )}
@@ -85,9 +87,11 @@ export function ScoreBoard({ players, lastAdjust, onUndo }: Props) {
                 key={p.id}
                 className={`flex justify-between items-center py-2 px-3 rounded transition-colors duration-500 ${flashClass}`}
               >
-                <span className="text-jeopardy-cream font-medium">{p.name}</span>
+                <span className="text-jeopardy-cream font-medium truncate">
+                  {p.name}
+                </span>
                 <span
-                  className={`font-bold tabular-nums ${
+                  className={`font-display text-xl tracking-wide tabular-nums ml-2 shrink-0 ${
                     p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'
                   }`}
                 >
