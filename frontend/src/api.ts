@@ -184,6 +184,16 @@ export const api = {
     request<{ code: string; memberCount: number; hostConnected: boolean }>(
       `/api/rooms/${encodeURIComponent(code)}`,
     ),
+  getSettings: () => request<AppSettings>('/api/settings'),
+  setSettings: (patch: Partial<AppSettings>) =>
+    request<AppSettings>('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify(patch),
+    }),
+};
+
+export type AppSettings = {
+  moneyBurningMode: boolean;
 };
 
 export type JudgeOutcome =

@@ -6,6 +6,7 @@ import {
   type Season,
 } from '../api';
 import { usePasscode } from '../context/PasscodeContext';
+import { useSettings } from '../hooks/useSettings';
 
 type Props = {
   refreshPlayers: () => Promise<void>;
@@ -23,6 +24,7 @@ function nextQuarterName(d = new Date()): string {
 
 export function AdminView({ refreshPlayers }: Props) {
   const { callProtected } = usePasscode();
+  const { settings, setSettings, refresh: refreshSettings } = useSettings();
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [busy, setBusy] = useState(false);
@@ -86,6 +88,21 @@ export function AdminView({ refreshPlayers }: Props) {
     }
   }
 
+  async function toggleMoneyBurning() {
+    const next = !settings.moneyBurningMode;
+    setBusy(true);
+    try {
+      const result = await callProtected(() =>
+        api.setSettings({ moneyBurningMode: next }),
+      );
+      if (result == null) return;
+      setSettings(result);
+    } finally {
+      setBusy(false);
+      void refreshSettings();
+    }
+  }
+
   async function viewSeason(id: number) {
     if (openSeasonId === id) {
       setOpenSeasonId(null);
@@ -98,6 +115,35 @@ export function AdminView({ refreshPlayers }: Props) {
 
   return (
     <div className="flex-1 rounded-lg bg-jeopardy-navy p-6 flex flex-col gap-8">
+      {/* Settings */}
+      <section>
+        <h2 className="text-jeopardy-gold text-xl font-bold mb-3">SETTINGS</h2>
+        <div className="bg-white/5 rounded p-4 flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-jeopardy-cream font-medium">
+              Money-burning mode {settings.moneyBurningMode ? '🔥' : ''}
+            </span>
+            <span className="text-jeopardy-cream/60 text-xs">
+              When ON, the host's voice reads each clue aloud via ElevenLabs
+              live (≈$0.005/clue + character usage). When OFF, only the
+              committed sound clips play. Default: OFF.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={toggleMoneyBurning}
+            disabled={busy}
+            className={`shrink-0 px-5 py-2 rounded font-bold text-sm uppercase tracking-widest transition-colors disabled:opacity-50 ${
+              settings.moneyBurningMode
+                ? 'bg-red-600 hover:bg-red-500 text-white'
+                : 'bg-white/10 hover:bg-white/20 text-jeopardy-cream'
+            }`}
+          >
+            {settings.moneyBurningMode ? 'ON' : 'OFF'}
+          </button>
+        </div>
+      </section>
+
       {/* Players */}
       <section>
         <h2 className="text-jeopardy-gold text-xl font-bold mb-3">PLAYERS</h2>

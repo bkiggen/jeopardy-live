@@ -1,5 +1,8 @@
 import { useCallback, useState } from 'react';
 import { useAudioAnalyzer } from './useAudioAnalyzer';
+import { getPasscode, stripHtml } from '../api';
+
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 export type SoundClip =
   | 'round-single'
@@ -47,5 +50,40 @@ export function useHost() {
     [connectAudio],
   );
 
-  return { playClip, amplitude, isPlaying, stop };
+  // Live ElevenLabs synthesis — only called when "money-burning mode" is on.
+  // Hits the passcode-gated /api/host/speak which calls ElevenLabs server-side.
+  const speakLive = useCallback(
+    async (text: string) => {
+      const clean = stripHtml(text);
+      if (!clean) return;
+      setIsPlaying(true);
+      try {
+        const passcode = getPasscode();
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (passcode) headers['x-app-passcode'] = passcode;
+
+        const res = await fetch(`${API_URL}/api/host/speak`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ text: clean }),
+        });
+        if (!res.ok) {
+          const detail = await res.text().catch(() => '');
+          console.warn(`speakLive ${res.status}; continuing without audio`, detail);
+          return;
+        }
+        const buf = await res.arrayBuffer();
+        await connectAudio(buf);
+      } catch (err) {
+        console.warn('speakLive failed; continuing without audio:', err);
+      } finally {
+        setIsPlaying(false);
+      }
+    },
+    [connectAudio],
+  );
+
+  return { playClip, speakLive, amplitude, isPlaying, stop };
 }

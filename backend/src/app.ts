@@ -7,6 +7,7 @@ import seasonsRouter from './routes/seasons.js';
 import hostRouter from './routes/host.js';
 import judgeRouter from './routes/judge.js';
 import roomsRouter from './routes/rooms.js';
+import settingsRouter from './routes/settings.js';
 import { corsOrigin } from './lib/cors.js';
 
 export function createApp() {
@@ -25,6 +26,7 @@ export function createApp() {
   app.use('/api/host', hostRouter);
   app.use('/api/judge', judgeRouter);
   app.use('/api/rooms', roomsRouter);
+  app.use('/api/settings', settingsRouter);
 
   return app;
 }

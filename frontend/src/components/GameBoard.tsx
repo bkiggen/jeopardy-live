@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHostContext } from '../context/HostContext';
 import { useRoom } from '../context/RoomContext';
+import { useSettings } from '../hooks/useSettings';
 import { ClueModal } from './ClueModal';
 
 export function GameBoard() {
-  const { playClip } = useHostContext();
+  const { playClip, speakLive } = useHostContext();
   const { isHost, game, scores, actions } = useRoom();
+  const { settings } = useSettings();
   const [loading, setLoading] = useState(false);
 
   const round = game.round;
@@ -40,7 +42,14 @@ export function GameBoard() {
   async function handlePickClue(clueId: number) {
     if (!isHost) return;
     const resp = await actions.revealClue(clueId);
-    if (!resp.ok) console.error('reveal clue failed:', resp.error);
+    if (!resp.ok) {
+      console.error('reveal clue failed:', resp.error);
+      return;
+    }
+    if (settings.moneyBurningMode) {
+      const clue = round?.clues.find((c) => c.id === clueId);
+      if (clue) void speakLive(clue.question);
+    }
   }
 
   if (!round) {
