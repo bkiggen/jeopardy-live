@@ -2,14 +2,31 @@ import { useState } from 'react';
 import { useRoom } from '../context/RoomContext';
 
 export function PlayerIdentityPrompt() {
-  const { isHost, scores, actions, socketId, members } = useRoom();
+  const { isHost, status, scores, actions, socketId, members } = useRoom();
   const [skipped, setSkipped] = useState(false);
 
   const me = socketId ? members.find((m) => m.socketId === socketId) : undefined;
   if (me?.playerId) return null;
   if (skipped) return null;
 
-  // Hide if no players exist yet (room hasn't loaded scores or there are none)
+  // Loading state — server hasn't sent the first game:state payload yet, so
+  // we can't tell whether the roster is empty or just not arrived
+  if (status !== 'connected') {
+    return (
+      <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-6 z-40">
+        <div className="bg-jeopardy-navy rounded-lg w-full max-w-md border-4 border-jeopardy-gold/60 p-6 text-center">
+          <h2 className="font-display text-jeopardy-gold text-3xl tracking-widest mb-3 animate-pulse">
+            CONNECTING…
+          </h2>
+          <p className="text-jeopardy-cream/70 text-sm">
+            Joining the room.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Genuinely empty roster — admin hasn't added anyone yet
   if (scores.length === 0) {
     return (
       <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-6 z-40">
