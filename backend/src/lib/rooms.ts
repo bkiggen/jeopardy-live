@@ -8,6 +8,7 @@ export type GameClue = {
 export type GameRound = {
   category: string;
   showNumber: number;
+  airDate: string | null;
   type: 'single' | 'double';
   clues: GameClue[];
 };

@@ -4,6 +4,18 @@ import { useRoom } from '../context/RoomContext';
 import { useSettings } from '../hooks/useSettings';
 import { ClueModal } from './ClueModal';
 
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+// Format an ISO date (YYYY-MM-DD) without timezone shenanigans.
+function formatAirDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return `${MONTHS[m - 1]} ${d}, ${y}`;
+}
+
 export function GameBoard() {
   const { playClip, speakLive } = useHostContext();
   const { isHost, game, scores, actions } = useRoom();
@@ -167,6 +179,7 @@ export function GameBoard() {
         ) : (
           <span className="text-jeopardy-cream/40 text-xs uppercase tracking-widest">
             {round.type === 'single' ? 'Single' : 'Double'} · show #{round.showNumber}
+            {round.airDate && ` · ${formatAirDate(round.airDate)}`}
           </span>
         )}
       </div>

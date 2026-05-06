@@ -47,13 +47,21 @@ export async function pickRandomCategory(
     where: { category, showNumber, round: type },
     orderBy: { value: 'asc' },
   });
+  // Normalize to modern values regardless of episode era. Old episodes used
+  // half values (100/200/300/400/500 single, 200/.../1000 double); the ladder
+  // here is what every player expects.
+  const ladder = type === 'single'
+    ? [200, 400, 600, 800, 1000]
+    : [400, 800, 1200, 1600, 2000];
+  const airDate = clues.find((c) => c.airDate)?.airDate ?? null;
   return {
     category,
     showNumber,
+    airDate: airDate ? airDate.toISOString().slice(0, 10) : null,
     type,
-    clues: clues.map((c) => ({
+    clues: clues.map((c, i) => ({
       id: c.id,
-      value: c.value ?? 0,
+      value: ladder[i] ?? c.value ?? 0,
       question: c.question ?? '',
       answer: c.answer ?? '',
     })),
