@@ -6,6 +6,15 @@ import { prisma } from '../prisma.js';
 const DATA_PATH = resolve(process.cwd(), 'src/data/200k_questions.json');
 const BATCH_SIZE = 5000;
 
+// Optional --limit=N flag caps the import. Useful in production where
+// 216k rows + Neon's free tier latency makes the full set very slow.
+function parseLimit(): number | null {
+  const arg = process.argv.find((a) => a.startsWith('--limit='));
+  if (!arg) return null;
+  const n = Number.parseInt(arg.split('=')[1] ?? '', 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 type RawClue = {
   category: string | null;
   air_date: string | null;
@@ -41,7 +50,11 @@ async function main() {
   const records: RawClue[] = JSON.parse(raw);
   console.log(`parsed ${records.length} records`);
 
-  const rows = records.map((r) => ({
+  const limit = parseLimit();
+  const limited = limit ? records.slice(0, limit) : records;
+  if (limit) console.log(`--limit=${limit} → importing first ${limited.length} records`);
+
+  const rows = limited.map((r) => ({
     showNumber: r.show_number ? Number.parseInt(r.show_number, 10) : null,
     airDate: r.air_date ? new Date(r.air_date) : null,
     round: r.round ? ROUND_MAP[r.round] ?? r.round.toLowerCase() : null,
