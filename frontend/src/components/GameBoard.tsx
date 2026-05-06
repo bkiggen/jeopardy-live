@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, type Clue, type Player, type RoundData } from '../api';
 import { useHostContext } from '../context/HostContext';
+import { usePasscode } from '../context/PasscodeContext';
 import { ClueModal } from './ClueModal';
 
 type Round = 'single' | 'double';
@@ -12,12 +13,17 @@ type Props = {
 
 export function GameBoard({ players, award }: Props) {
   const { speak } = useHostContext();
+  const { ensurePasscode } = usePasscode();
   const [round, setRound] = useState<RoundData | null>(null);
   const [usedClueIds, setUsedClueIds] = useState<Set<number>>(new Set());
   const [activeClue, setActiveClue] = useState<Clue | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function startRound(r: Round) {
+    const ok = await ensurePasscode({
+      message: 'Enter the host passcode to start a round.',
+    });
+    if (!ok) return;
     setLoading(true);
     try {
       const data = await api.getRandomCategory(r);

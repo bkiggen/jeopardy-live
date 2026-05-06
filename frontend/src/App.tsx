@@ -4,6 +4,7 @@ import { AdminView } from './components/AdminView';
 import { ScoreBoard } from './components/ScoreBoard';
 import { CharacterCanvas } from './components/CharacterCanvas';
 import { api, type Player, type Season } from './api';
+import { usePasscode } from './context/PasscodeContext';
 
 type View = 'game' | 'admin';
 
@@ -14,6 +15,7 @@ export type LastAdjust = {
 };
 
 function App() {
+  const { callProtected } = usePasscode();
   const [view, setView] = useState<View>('game');
   const [players, setPlayers] = useState<Player[]>([]);
   const [activeSeason, setActiveSeason] = useState<Season | null>(null);
@@ -44,7 +46,11 @@ function App() {
   const award = useCallback(
     async (playerId: number, delta: number) => {
       const player = players.find((p) => p.id === playerId);
-      await api.adjustScore(playerId, delta);
+      const result = await callProtected(
+        () => api.adjustScore(playerId, delta),
+        { message: 'Enter the host passcode to award points.' },
+      );
+      if (result == null) return;
       setLastAdjust({
         playerId,
         playerName: player?.name ?? `Player ${playerId}`,
@@ -52,15 +58,18 @@ function App() {
       });
       await refreshPlayers();
     },
-    [players, refreshPlayers],
+    [callProtected, players, refreshPlayers],
   );
 
   const undo = useCallback(async () => {
     if (!lastAdjust) return;
-    await api.adjustScore(lastAdjust.playerId, -lastAdjust.delta);
+    const result = await callProtected(() =>
+      api.adjustScore(lastAdjust.playerId, -lastAdjust.delta),
+    );
+    if (result == null) return;
     setLastAdjust(null);
     await refreshPlayers();
-  }, [lastAdjust, refreshPlayers]);
+  }, [callProtected, lastAdjust, refreshPlayers]);
 
   const onAdminChange = useCallback(async () => {
     await Promise.all([refreshPlayers(), refreshSeason()]);

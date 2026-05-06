@@ -42,11 +42,52 @@ export type LeaderboardEntry = {
   totalScore: number;
 };
 
+const PASSCODE_KEY = 'standup-jeopardy:passcode';
+
+export function getPasscode(): string | null {
+  try {
+    return localStorage.getItem(PASSCODE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setPasscode(value: string): void {
+  try {
+    localStorage.setItem(PASSCODE_KEY, value);
+  } catch {
+    // ignore
+  }
+}
+
+export function clearPasscode(): void {
+  try {
+    localStorage.removeItem(PASSCODE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export class PasscodeRequiredError extends Error {
+  constructor() {
+    super('passcode required');
+    this.name = 'PasscodeRequiredError';
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-  });
+  const passcode = getPasscode();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((init?.headers as Record<string, string> | undefined) ?? {}),
+  };
+  if (passcode) headers['x-app-passcode'] = passcode;
+
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
+  if (res.status === 401) {
+    clearPasscode();
+    throw new PasscodeRequiredError();
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`${path} -> ${res.status}: ${text}`);

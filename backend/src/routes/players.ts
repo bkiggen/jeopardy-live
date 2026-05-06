@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { ensureScore, requireActiveSeason } from '../lib/season.js';
+import { requirePasscode } from '../lib/passcode.js';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/players — add a player and bootstrap their season score row
-router.post('/', async (req, res) => {
+router.post('/', requirePasscode, async (req, res) => {
   const { name } = req.body as { name?: string };
   if (!name?.trim()) {
     res.status(400).json({ error: 'name is required' });
@@ -55,7 +56,7 @@ router.post('/', async (req, res) => {
 });
 
 // PATCH /api/players/:id — toggle isActive
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requirePasscode, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: 'invalid player id' });

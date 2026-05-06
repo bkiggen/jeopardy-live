@@ -1,9 +1,10 @@
 import { Router } from 'express';
+import { requirePasscode } from '../lib/passcode.js';
 
 const router = Router();
 
 // POST /api/host/speak — { text } -> audio/mpeg
-router.post('/speak', async (req, res) => {
+router.post('/speak', requirePasscode, async (req, res) => {
   const { text } = req.body as { text?: string };
   if (!text) {
     res.status(400).json({ error: 'text is required' });

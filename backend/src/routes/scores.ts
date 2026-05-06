@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { requireActiveSeason } from '../lib/season.js';
+import { requirePasscode } from '../lib/passcode.js';
 
 const router = Router();
 
 // POST /api/scores/adjust — { playerId, delta } -> updated score
-router.post('/adjust', async (req, res) => {
+router.post('/adjust', requirePasscode, async (req, res) => {
   const { playerId, delta } = req.body as { playerId?: number; delta?: number };
   if (typeof playerId !== 'number' || typeof delta !== 'number') {
     res.status(400).json({ error: 'playerId and delta (numbers) are required' });

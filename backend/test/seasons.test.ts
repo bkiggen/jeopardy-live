@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app.js';
 import { prisma } from '../src/prisma.js';
-import { TEST_PREFIX } from './setup.js';
+import { TEST_PREFIX, passHeader } from './setup.js';
 
 describe('GET /api/seasons', () => {
   it('returns seasons newest first', async () => {
@@ -39,7 +39,10 @@ describe('POST /api/seasons', () => {
     const before = await prisma.season.findFirstOrThrow({ where: { isActive: true } });
     const name = `${TEST_PREFIX}${Date.now().toString(36)}`;
     try {
-      const res = await request(app).post('/api/seasons').send({ name });
+      const res = await request(app)
+        .post('/api/seasons')
+        .set(passHeader)
+        .send({ name });
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({ name, isActive: true });
 
@@ -56,5 +59,10 @@ describe('POST /api/seasons', () => {
         data: { isActive: true, endDate: null },
       });
     }
+  });
+
+  it('401s without passcode', async () => {
+    const res = await request(app).post('/api/seasons').send({ name: 'X' });
+    expect(res.status).toBe(401);
   });
 });

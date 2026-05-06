@@ -5,6 +5,7 @@ import {
   type Player,
   type Season,
 } from '../api';
+import { usePasscode } from '../context/PasscodeContext';
 
 type Props = {
   refreshPlayers: () => Promise<void>;
@@ -21,6 +22,7 @@ function nextQuarterName(d = new Date()): string {
 }
 
 export function AdminView({ refreshPlayers }: Props) {
+  const { callProtected } = usePasscode();
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [busy, setBusy] = useState(false);
@@ -49,7 +51,8 @@ export function AdminView({ refreshPlayers }: Props) {
     if (!name.trim()) return;
     setBusy(true);
     try {
-      await api.addPlayer(name.trim());
+      const result = await callProtected(() => api.addPlayer(name.trim()));
+      if (result == null) return;
       setName('');
       await Promise.all([refreshAll(), refreshPlayers()]);
     } finally {
@@ -60,7 +63,8 @@ export function AdminView({ refreshPlayers }: Props) {
   async function toggle(p: Player) {
     setBusy(true);
     try {
-      await api.togglePlayer(p.id, !p.isActive);
+      const result = await callProtected(() => api.togglePlayer(p.id, !p.isActive));
+      if (result == null) return;
       await Promise.all([refreshAll(), refreshPlayers()]);
     } finally {
       setBusy(false);
@@ -73,7 +77,8 @@ export function AdminView({ refreshPlayers }: Props) {
     if (!confirm(`Start "${seasonName}"? This deactivates the current season.`)) return;
     setBusy(true);
     try {
-      await api.startSeason(seasonName.trim());
+      const result = await callProtected(() => api.startSeason(seasonName.trim()));
+      if (result == null) return;
       setSeasonName(nextQuarterName());
       await Promise.all([refreshAll(), refreshPlayers()]);
     } finally {

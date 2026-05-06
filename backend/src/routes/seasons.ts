@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { currentQuarterName } from '../lib/season.js';
+import { requirePasscode } from '../lib/passcode.js';
 
 const router = Router();
 
@@ -36,7 +37,7 @@ router.get('/:id/scores', async (req, res) => {
 });
 
 // POST /api/seasons — start a new active season (deactivates others)
-router.post('/', async (req, res) => {
+router.post('/', requirePasscode, async (req, res) => {
   const { name, startDate } = req.body as { name?: string; startDate?: string };
   const seasonName = name?.trim() || currentQuarterName();
   const start = startDate ? new Date(startDate) : new Date();

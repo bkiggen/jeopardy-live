@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { redactAnswer } from '../lib/judge.js';
+import { requirePasscode } from '../lib/passcode.js';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ type JudgeBody = {
 
 type JudgeResult = { correct: boolean; reasoning: string };
 
-router.post('/', async (req, res) => {
+router.post('/', requirePasscode, async (req, res) => {
   const { question, correctAnswer, playerAnswer } = req.body as JudgeBody;
   if (!question || !correctAnswer || !playerAnswer) {
     res.status(400).json({
