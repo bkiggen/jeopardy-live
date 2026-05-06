@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { useHost } from '../hooks/useHost';
+import { useHostContext } from '../context/HostContext';
 
-const W = 400;
-const H = 500;
+const W = 320;
+const H = 400;
 
 export function CharacterCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { amplitude, isSpeaking } = useHost();
+  const { amplitude, isSpeaking } = useHostContext();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -16,21 +16,40 @@ export function CharacterCanvas() {
 
     ctx.clearRect(0, 0, W, H);
 
-    // Placeholder until sprites are drawn:
+    // Background
     ctx.fillStyle = '#0a0f5c';
     ctx.fillRect(0, 0, W, H);
+
+    // Head (placeholder until sprites ship)
     ctx.fillStyle = '#d69f4c';
-    ctx.fillRect(W / 2 - 80, 100, 160, 200);
+    ctx.beginPath();
+    ctx.ellipse(W / 2, H / 2 - 20, 90, 110, 0, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Mouth — sized by amplitude.
-    const mouthH = 4 + Math.round(amplitude * 50);
+    // Eyes
+    ctx.fillStyle = '#0a0f5c';
+    ctx.beginPath();
+    ctx.arc(W / 2 - 30, H / 2 - 40, 6, 0, Math.PI * 2);
+    ctx.arc(W / 2 + 30, H / 2 - 40, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Mouth — height scales with amplitude
+    const mouthH = 4 + Math.round(amplitude * 60);
+    const mouthW = 50 + Math.round(amplitude * 30);
     ctx.fillStyle = '#1a0a0a';
-    ctx.fillRect(W / 2 - 30, 240 - mouthH / 2, 60, mouthH);
+    ctx.beginPath();
+    ctx.ellipse(W / 2, H / 2 + 20, mouthW / 2, mouthH / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
 
+    // Status label
     ctx.fillStyle = '#f5e9c4';
     ctx.font = '14px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText(isSpeaking ? 'speaking…' : 'host (placeholder)', W / 2, H - 20);
+    ctx.fillText(
+      isSpeaking ? 'speaking…' : 'host (placeholder sprite)',
+      W / 2,
+      H - 16,
+    );
   }, [amplitude, isSpeaking]);
 
   return (

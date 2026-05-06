@@ -1,13 +1,28 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { GameBoard } from './components/GameBoard';
 import { AdminView } from './components/AdminView';
 import { ScoreBoard } from './components/ScoreBoard';
 import { CharacterCanvas } from './components/CharacterCanvas';
+import { api, type Player } from './api';
 
 type View = 'game' | 'admin';
 
 function App() {
   const [view, setView] = useState<View>('game');
+  const [players, setPlayers] = useState<Player[]>([]);
+
+  const refreshPlayers = useCallback(async () => {
+    try {
+      const next = await api.getPlayers();
+      setPlayers(next);
+    } catch (err) {
+      console.error('failed to load players', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshPlayers();
+  }, [refreshPlayers]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -38,10 +53,14 @@ function App() {
           <div className="flex justify-center">
             <CharacterCanvas />
           </div>
-          {view === 'game' ? <GameBoard /> : <AdminView />}
+          {view === 'game' ? (
+            <GameBoard players={players} refreshPlayers={refreshPlayers} />
+          ) : (
+            <AdminView players={players} refreshPlayers={refreshPlayers} />
+          )}
         </section>
         <aside>
-          <ScoreBoard />
+          <ScoreBoard players={players} />
         </aside>
       </main>
     </div>
