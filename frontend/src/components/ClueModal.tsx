@@ -111,13 +111,6 @@ export function ClueModal() {
               >
                 Reveal Answer
               </button>
-              <button
-                type="button"
-                onClick={() => actions.closeClue()}
-                className="px-3 py-1.5 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm"
-              >
-                Nobody got it
-              </button>
             </div>
           </div>
         )}
