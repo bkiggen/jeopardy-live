@@ -1,5 +1,7 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '../prisma.js';
 import { requireActiveSeason } from './season.js';
+import { redactAnswer } from './judge.js';
 import type { GameRound, RoomScore } from './rooms.js';
 
 export async function loadActiveScores(): Promise<RoomScore[]> {
@@ -65,4 +67,91 @@ export async function adjustPlayerScore(
     update: { totalScore: { increment: delta } },
     create: { playerId, seasonId: season.id, totalScore: delta },
   });
+}
+
+const JUDGE_SYSTEM_PROMPT = `You are judging Jeopardy! answers. Compare the player's spoken answer to the correct response.
+
+Be lenient on:
+- Minor spelling and pronunciation variations ("Cleopatra" vs "Cleopatra the seventh")
+- Articles ("the X" vs "X")
+- Honorifics and titles ("President Lincoln" vs "Lincoln")
+- Word order in lists
+- Partial names when unambiguous ("Einstein" for "Albert Einstein")
+
+Be strict on:
+- Wrong facts, wrong people, wrong places
+- Missing key qualifiers that change meaning
+- Answers that are merely related but not the specific response
+
+CRITICAL — When you rule a player INCORRECT:
+- NEVER state, name, hint at, or partially spell the correct answer in your reasoning.
+- Do NOT say things like "the correct answer is X", "it should be X", "X is the right answer", "they meant X", or even "this refers to X".
+- Explain only why the player's specific answer is wrong: wrong category, wrong era, wrong field, wrong person type, etc.
+- Other players may still try to answer — revealing the answer ruins the round.
+- Good incorrect-reasoning: "That's a fictional character, not a historical figure." / "Wrong continent." / "Right field, wrong person."
+- Bad incorrect-reasoning: "Lady Macbeth is wrong; Cleopatra is the answer."
+
+When you rule a player CORRECT, you may reference the answer in reasoning.
+
+You MUST respond with ONLY a JSON object, no preamble, no markdown fences. Schema:
+{"correct": boolean, "reasoning": string}
+
+Keep "reasoning" under 30 words.`;
+
+export type JudgeOutcome =
+  | { ok: true; correct: boolean; reasoning: string }
+  | { ok: false; error: string };
+
+export async function judgeAnswerServerSide(
+  question: string,
+  correctAnswer: string,
+  playerAnswer: string,
+): Promise<JudgeOutcome> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { ok: false, error: 'ANTHROPIC_API_KEY not configured' };
+
+  const client = new Anthropic({ apiKey });
+  let response;
+  try {
+    response = await client.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 200,
+      system: JUDGE_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: `Question: ${question}\nCorrect answer: ${correctAnswer}\nPlayer's answer: ${playerAnswer}`,
+        },
+      ],
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  const text = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+    .trim();
+
+  const stripped = text
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  let parsed: { correct: boolean; reasoning: string };
+  try {
+    parsed = JSON.parse(stripped) as { correct: boolean; reasoning: string };
+    if (typeof parsed.correct !== 'boolean' || typeof parsed.reasoning !== 'string') {
+      throw new Error('shape mismatch');
+    }
+  } catch {
+    return { ok: false, error: 'judge returned malformed JSON' };
+  }
+
+  if (!parsed.correct) {
+    parsed.reasoning = redactAnswer(parsed.reasoning, correctAnswer);
+  }
+
+  return { ok: true, correct: parsed.correct, reasoning: parsed.reasoning };
 }

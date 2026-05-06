@@ -21,6 +21,7 @@ export type RoomMemberView = {
   socketId: string;
   name: string | null;
   isHost: boolean;
+  playerId: number | null;
 };
 
 type ConnectionStatus = 'connecting' | 'connected' | 'closed' | 'error';
@@ -35,6 +36,13 @@ type RoomActions = {
   resetRound: () => Promise<AckResponse>;
   adjustScore: (playerId: number, delta: number) => Promise<AckResponse>;
   undoScore: () => Promise<AckResponse>;
+  ruleCorrect: () => Promise<AckResponse>;
+  ruleIncorrect: () => Promise<AckResponse>;
+  cancelBuzz: () => Promise<AckResponse>;
+  identifyPlayer: (playerId: number) => Promise<AckResponse>;
+  buzz: () => Promise<AckResponse>;
+  typing: (text: string) => Promise<AckResponse>;
+  submit: (text: string) => Promise<AckResponse>;
 };
 
 type RoomContextValue = {
@@ -47,6 +55,7 @@ type RoomContextValue = {
   scores: RoomScore[];
   lastAdjust: RoomLastAdjust | null;
   actions: RoomActions;
+  socketId: string | null;
 };
 
 const emptyGame: RoomGameState = {
@@ -70,6 +79,7 @@ export function RoomProvider({ code, isHost, children }: Props) {
   const [game, setGame] = useState<RoomGameState>(emptyGame);
   const [scores, setScores] = useState<RoomScore[]>([]);
   const [lastAdjust, setLastAdjust] = useState<RoomLastAdjust | null>(null);
+  const [socketId, setSocketId] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -80,6 +90,7 @@ export function RoomProvider({ code, isHost, children }: Props) {
     socketRef.current = s;
 
     s.on('connect', () => {
+      setSocketId(s.id ?? null);
       const passcode = isHost ? getPasscode() ?? undefined : undefined;
       s.emit('room:join', { code, isHost, passcode }, (resp: AckResponse) => {
         if (resp.ok) {
@@ -147,6 +158,13 @@ export function RoomProvider({ code, isHost, children }: Props) {
       adjustScore: (playerId, delta) =>
         emit('host:adjust_score', { playerId, delta }),
       undoScore: () => emit('host:undo_score'),
+      ruleCorrect: () => emit('host:rule_correct'),
+      ruleIncorrect: () => emit('host:rule_incorrect'),
+      cancelBuzz: () => emit('host:cancel_buzz'),
+      identifyPlayer: (playerId) => emit('player:identify', { playerId }),
+      buzz: () => emit('player:buzz'),
+      typing: (text) => emit('player:typing', { text }),
+      submit: (text) => emit('player:submit', { text }),
     };
   }, []);
 
@@ -161,8 +179,9 @@ export function RoomProvider({ code, isHost, children }: Props) {
       scores,
       lastAdjust,
       actions,
+      socketId,
     }),
-    [code, isHost, status, errorMessage, members, game, scores, lastAdjust, actions],
+    [code, isHost, status, errorMessage, members, game, scores, lastAdjust, actions, socketId],
   );
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;

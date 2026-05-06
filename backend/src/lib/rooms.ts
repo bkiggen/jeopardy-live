@@ -12,12 +12,24 @@ export type GameRound = {
   clues: GameClue[];
 };
 
+export type PendingJudgement = {
+  playerId: number;
+  playerName: string;
+  answer: string;
+  state: 'judging' | 'correct' | 'incorrect';
+  reasoning: string | null;
+};
+
 export type ActiveClue = {
   id: number;
   value: number;
   question: string;
   answer: string;
   revealed: boolean;
+  buzzedPlayerId: number | null;
+  typingAnswer: string;
+  lockedOutPlayerIds: number[];
+  pendingJudgement: PendingJudgement | null;
 };
 
 export type RoomScore = {
@@ -38,7 +50,7 @@ export type LastAdjust = {
   delta: number;
 };
 
-type RoomMember = {
+export type RoomMember = {
   socketId: string;
   playerId: number | null;
   name: string | null;

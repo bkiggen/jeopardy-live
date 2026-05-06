@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { GameBoard } from '../components/GameBoard';
 import { ScoreBoard } from '../components/ScoreBoard';
 import { CharacterCanvas } from '../components/CharacterCanvas';
+import { PlayerIdentityPrompt } from '../components/PlayerIdentityPrompt';
 import { RoomProvider, useRoom } from '../context/RoomContext';
 
 export function Room() {
@@ -43,6 +44,7 @@ function RoomShell() {
           <ScoreBoard />
         </aside>
       </main>
+      <PlayerIdentityPrompt />
       <button
         type="button"
         onClick={() => navigate('/')}

@@ -77,19 +77,19 @@ export function Landing() {
           <p className="text-jeopardy-cream/70 text-sm">
             Got a 4-letter code? Drop it in to join the game.
           </p>
-          <form onSubmit={joinGame} className="flex gap-2">
+          <form onSubmit={joinGame} className="flex gap-2 w-full">
             <input
               type="text"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               maxLength={4}
               placeholder="ABCD"
-              className="flex-1 px-3 py-3 rounded bg-white/10 text-jeopardy-cream font-display text-2xl tracking-[0.5em] uppercase placeholder-jeopardy-cream/30 border border-jeopardy-gold/30 text-center"
+              className="min-w-0 flex-1 px-3 py-3 rounded bg-white/10 text-jeopardy-cream font-display text-2xl tracking-[0.5em] uppercase placeholder-jeopardy-cream/30 border border-jeopardy-gold/30 text-center"
             />
             <button
               type="submit"
               disabled={busy || joinCode.length !== 4}
-              className="px-6 py-3 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold disabled:opacity-50"
+              className="shrink-0 px-6 py-3 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold disabled:opacity-50"
             >
               Join
             </button>
