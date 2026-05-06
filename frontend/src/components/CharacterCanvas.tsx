@@ -1,63 +1,62 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useHostContext } from '../context/HostContext';
 
-const W = 320;
-const H = 400;
+// Six pre-drawn host portraits, ordered by mouth opening
+//   0: closed              (idle / between syllables)
+//   1: slight open         (consonant / soft vowel)
+//   2: medium open
+//   3: wide open
+//   4: rounded "O"
+//   5: resting smile       (used when no clip is playing)
+const PANELS: ReadonlyArray<string> = [
+  '/face-sprites/panel-1.png',
+  '/face-sprites/panel-2.png',
+  '/face-sprites/panel-3.png',
+  '/face-sprites/panel-4.png',
+  '/face-sprites/panel-5.png',
+  '/face-sprites/panel-6.png',
+];
+
+const REST_PANEL = 5;
+
+function pickPanel(amplitude: number, isPlaying: boolean): number {
+  if (!isPlaying) return REST_PANEL;
+  if (amplitude < 0.05) return 0;
+  if (amplitude < 0.15) return 1;
+  if (amplitude < 0.35) return 2;
+  if (amplitude < 0.6) return 3;
+  return 4;
+}
 
 export function CharacterCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const { amplitude, isPlaying } = useHostContext();
 
+  // Preload all panels once so opacity-swaps are instant
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    for (const src of PANELS) {
+      const img = new Image();
+      img.src = src;
+    }
+  }, []);
 
-    ctx.clearRect(0, 0, W, H);
-
-    // Background
-    ctx.fillStyle = '#0a0f5c';
-    ctx.fillRect(0, 0, W, H);
-
-    // Head (placeholder until sprites ship)
-    ctx.fillStyle = '#d69f4c';
-    ctx.beginPath();
-    ctx.ellipse(W / 2, H / 2 - 20, 90, 110, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Eyes
-    ctx.fillStyle = '#0a0f5c';
-    ctx.beginPath();
-    ctx.arc(W / 2 - 30, H / 2 - 40, 6, 0, Math.PI * 2);
-    ctx.arc(W / 2 + 30, H / 2 - 40, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Mouth — height scales with amplitude
-    const mouthH = 4 + Math.round(amplitude * 60);
-    const mouthW = 50 + Math.round(amplitude * 30);
-    ctx.fillStyle = '#1a0a0a';
-    ctx.beginPath();
-    ctx.ellipse(W / 2, H / 2 + 20, mouthW / 2, mouthH / 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Status label
-    ctx.fillStyle = '#f5e9c4';
-    ctx.font = '14px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText(
-      isPlaying ? 'speaking…' : 'host (placeholder sprite)',
-      W / 2,
-      H - 16,
-    );
-  }, [amplitude, isPlaying]);
+  const active = pickPanel(amplitude, isPlaying);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={W}
-      height={H}
-      className="rounded-lg border border-jeopardy-gold/40"
-    />
+    <div
+      className="relative w-full max-w-lg aspect-[506/352] rounded-lg overflow-hidden border-2 border-jeopardy-gold/40 bg-jeopardy-navy-darker"
+      aria-label="Jeopardy host"
+    >
+      {PANELS.map((src, i) => (
+        <img
+          key={src}
+          src={src}
+          alt=""
+          draggable={false}
+          className={`absolute inset-0 w-full h-full object-cover ${
+            i === active ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+      ))}
+    </div>
   );
 }
