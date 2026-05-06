@@ -132,42 +132,62 @@ export function GameBoard() {
 
   return (
     <div className="flex-1 rounded-lg bg-jeopardy-navy p-6 flex flex-col gap-4 border-2 border-jeopardy-gold/30">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <h2 className="font-display text-jeopardy-gold text-4xl tracking-wider uppercase text-shadow-tile">
           {round.category}
         </h2>
-        <span className="text-jeopardy-cream/40 text-xs uppercase tracking-widest">
-          {round.type === 'single' ? 'Single' : 'Double'} · show #{round.showNumber}
-        </span>
-      </div>
-
-      <div className="flex-1 flex items-center">
-        <div className="grid grid-cols-5 gap-3 w-full">
-          {round.clues.map((c) => {
-            const used = usedClueIds.has(c.id);
-            const interactive = isHost && !used;
-            return (
+        {activeClue ? (
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="font-display text-jeopardy-gold text-4xl tracking-wider">
+              ${activeClue.value}
+            </span>
+            {isHost && (
               <button
                 type="button"
-                key={c.id}
-                disabled={!interactive}
-                onClick={() => handlePickClue(c.id)}
-                className={`rounded-lg font-display tracking-wider h-40 flex items-center justify-center transition-all duration-150 ${
-                  used
-                    ? 'bg-jeopardy-navy-darker/60 text-transparent cursor-not-allowed'
-                    : interactive
-                      ? 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile hover:bg-blue-700 hover:scale-[1.03] active:scale-95 cursor-pointer shadow-inner'
-                      : 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile cursor-default'
-                }`}
+                onClick={() => actions.closeClue()}
+                aria-label="Close clue"
+                className="text-jeopardy-cream/60 hover:text-jeopardy-cream text-2xl px-2"
               >
-                {used ? '·' : `$${c.value}`}
+                ✕
               </button>
-            );
-          })}
-        </div>
+            )}
+          </div>
+        ) : (
+          <span className="text-jeopardy-cream/40 text-xs uppercase tracking-widest">
+            {round.type === 'single' ? 'Single' : 'Double'} · show #{round.showNumber}
+          </span>
+        )}
       </div>
 
-      {activeClue && <ClueModal />}
+      {activeClue ? (
+        <ClueModal />
+      ) : (
+        <div className="flex-1 flex items-center">
+          <div className="grid grid-cols-5 gap-3 w-full">
+            {round.clues.map((c) => {
+              const used = usedClueIds.has(c.id);
+              const interactive = isHost && !used;
+              return (
+                <button
+                  type="button"
+                  key={c.id}
+                  disabled={!interactive}
+                  onClick={() => handlePickClue(c.id)}
+                  className={`rounded-lg font-display tracking-wider h-40 flex items-center justify-center transition-all duration-150 ${
+                    used
+                      ? 'bg-jeopardy-navy-darker/60 text-transparent cursor-not-allowed'
+                      : interactive
+                        ? 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile hover:bg-blue-700 hover:scale-[1.03] active:scale-95 cursor-pointer shadow-inner'
+                        : 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile cursor-default'
+                  }`}
+                >
+                  {used ? '·' : `$${c.value}`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

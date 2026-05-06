@@ -8,10 +8,21 @@ type Pending = NonNullable<
   NonNullable<ReturnType<typeof useRoom>['game']['activeClue']>['pendingJudgement']
 >;
 
+// Renders inline inside the GameBoard panel (not a modal). The host's clue
+// content fills the same space the tile grid normally occupies, so the host
+// avatar above stays visible the whole time.
 export function ClueModal() {
   const { playClip } = useHostContext();
   const { isHost, game, members, scores, socketId, actions } = useRoom();
   const clue = game.activeClue;
+
+  const penalty = useMemo(
+    () =>
+      leaderPenalty(scores.map((s) => ({ id: s.playerId, score: s.score }))),
+    [scores],
+  );
+  const penaltyLeader = penalty.active ? penalty.leaderId : null;
+
   if (!clue) return null;
 
   async function ruleCorrect() {
@@ -33,7 +44,8 @@ export function ClueModal() {
   const me = socketId ? members.find((m) => m.socketId === socketId) : null;
   const myPlayerId = me?.playerId ?? null;
 
-  const lockedOut = myPlayerId !== null && clue.lockedOutPlayerIds.includes(myPlayerId);
+  const lockedOut =
+    myPlayerId !== null && clue.lockedOutPlayerIds.includes(myPlayerId);
   const isMyBuzz = myPlayerId !== null && clue.buzzedPlayerId === myPlayerId;
   const someoneElseBuzzed =
     clue.buzzedPlayerId !== null && clue.buzzedPlayerId !== myPlayerId;
@@ -44,48 +56,49 @@ export function ClueModal() {
     clue.buzzedPlayerId !== null
       ? scores.find((s) => s.playerId === clue.buzzedPlayerId)?.name ?? 'Someone'
       : null;
-
-  const penalty = useMemo(
-    () =>
-      leaderPenalty(scores.map((s) => ({ id: s.playerId, score: s.score }))),
-    [scores],
-  );
-  const penaltyLeader = penalty.active ? penalty.leaderId : null;
-
   const canBuzz = myPlayerId !== null && buzzerOpen && !lockedOut;
-  const onClose = isHost ? () => actions.closeClue() : undefined;
 
   return (
-    <ModalShell
-      clueValue={clue.value}
-      revealed={clue.revealed}
-      answer={clue.answer}
-      question={clue.question}
-      onClose={onClose}
-    >
-      <div className="px-6 py-4 border-t-2 border-jeopardy-gold/40 flex flex-col gap-3">
-        {/* Player buzz button — anyone with identity who isn't locked out */}
+    <div className="flex-1 flex flex-col gap-4 animate-clue-in">
+      {/* Question */}
+      <div className="flex-1 flex items-center justify-center text-center px-2">
+        <p className="font-display text-white text-shadow-clue uppercase leading-tight tracking-wide text-3xl sm:text-4xl md:text-5xl">
+          {stripHtmlForDisplay(clue.question)}
+        </p>
+      </div>
+
+      {/* Answer */}
+      {clue.revealed && (
+        <div className="text-center border-t border-jeopardy-gold/20 pt-3">
+          <p className="text-jeopardy-cream/60 text-xs uppercase tracking-widest mb-1">
+            Answer
+          </p>
+          <p className="font-display text-jeopardy-gold text-3xl uppercase tracking-wide">
+            {clue.answer}
+          </p>
+        </div>
+      )}
+
+      {/* Controls */}
+      <div className="border-t-2 border-jeopardy-gold/40 pt-3 flex flex-col gap-3">
         {canBuzz && (
           <button
             type="button"
             onClick={() => actions.buzz()}
-            className="w-full py-8 bg-red-600 hover:bg-red-500 active:scale-95 transition-all rounded-lg font-display text-jeopardy-cream text-5xl tracking-[0.4em] shadow-lg"
+            className="w-full py-6 bg-red-600 hover:bg-red-500 active:scale-95 transition-all rounded-lg font-display text-jeopardy-cream text-4xl tracking-[0.4em] shadow-lg"
           >
             BUZZ
           </button>
         )}
 
-        {/* Locked-out player */}
         {myPlayerId !== null && lockedOut && !pending && !isMyBuzz && (
           <p className="text-red-300/70 italic text-center text-sm">
             You're locked out for this clue.
           </p>
         )}
 
-        {/* I'm typing my answer */}
         {isMyBuzz && !pending && <MyAnswerInput actions={actions} />}
 
-        {/* Someone else is typing — watch panel */}
         {someoneElseBuzzed && !pending && (
           <BuzzedPanel
             name={buzzedName ?? 'Someone'}
@@ -95,7 +108,6 @@ export function ClueModal() {
           />
         )}
 
-        {/* Awaiting buzz — host control row (always present for host) */}
         {isHost && buzzerOpen && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-col gap-1">
@@ -113,19 +125,16 @@ export function ClueModal() {
                 </p>
               )}
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => actions.revealAnswer()}
-                className="px-3 py-1.5 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm"
-              >
-                Reveal Answer
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => actions.revealAnswer()}
+              className="px-3 py-1.5 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm"
+            >
+              Reveal Answer
+            </button>
           </div>
         )}
 
-        {/* Judging spinner */}
         {pending && pending.state === 'judging' && (
           <div className="bg-yellow-500/20 border border-yellow-400/40 rounded p-3">
             <p className="text-yellow-200 italic text-sm">
@@ -134,7 +143,6 @@ export function ClueModal() {
           </div>
         )}
 
-        {/* Verdict — different surface for host vs player */}
         {pending && pending.state !== 'judging' && (
           isHost ? (
             <HostVerdict
@@ -149,14 +157,13 @@ export function ClueModal() {
           )
         )}
 
-        {/* Bystander hint */}
         {!isHost && !myPlayerId && (
           <p className="text-jeopardy-cream/60 text-sm italic text-center">
             Pick your name from the prompt to play.
           </p>
         )}
       </div>
-    </ModalShell>
+    </div>
   );
 }
 
@@ -360,72 +367,6 @@ function PlayerVerdict({ pending, mine }: { pending: Pending; mine: boolean }) {
       <p className="text-jeopardy-cream/40 text-xs mt-2 italic">
         Awaiting host's final ruling…
       </p>
-    </div>
-  );
-}
-
-function ModalShell({
-  clueValue,
-  question,
-  answer,
-  revealed,
-  onClose,
-  children,
-}: {
-  clueValue: number;
-  question: string;
-  answer: string;
-  revealed: boolean;
-  onClose?: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={`fixed inset-0 bg-black/85 flex items-center justify-center p-6 z-50 ${onClose ? 'cursor-pointer' : ''}`}
-      onClick={onClose}
-      role={onClose ? 'button' : undefined}
-      tabIndex={onClose ? -1 : undefined}
-      aria-label={onClose ? 'Close clue' : undefined}
-    >
-      <div
-        className="bg-jeopardy-navy rounded-lg w-full max-w-5xl border-4 border-jeopardy-gold/60 shadow-2xl animate-clue-in flex flex-col max-h-[92vh] cursor-default"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-3 border-b-2 border-jeopardy-gold/40">
-          <span className="font-display text-jeopardy-gold text-5xl tracking-wider">
-            ${clueValue}
-          </span>
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close clue"
-              className="text-jeopardy-cream/60 hover:text-jeopardy-cream text-2xl"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        <div className="flex-1 flex items-center justify-center px-8 py-12 text-center overflow-y-auto">
-          <p className="font-display text-white text-shadow-clue uppercase leading-tight tracking-wide text-3xl sm:text-5xl md:text-6xl">
-            {stripHtmlForDisplay(question)}
-          </p>
-        </div>
-
-        {revealed && (
-          <div className="px-8 pb-6 text-center border-t border-jeopardy-gold/20 pt-6">
-            <p className="text-jeopardy-cream/60 text-xs uppercase tracking-widest mb-2">
-              Answer
-            </p>
-            <p className="font-display text-jeopardy-gold text-4xl uppercase tracking-wide">
-              {answer}
-            </p>
-          </div>
-        )}
-
-        {children}
-      </div>
     </div>
   );
 }
