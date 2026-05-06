@@ -63,8 +63,6 @@ type RoomContextValue = {
   hostDisconnectedAt: number | null;
 };
 
-const PLAYER_ID_KEY = (code: string) => `jeopardy:room:${code}:playerId`;
-
 const emptyGame: RoomGameState = {
   round: null,
   usedClueIds: [],
@@ -107,30 +105,6 @@ export function RoomProvider({ code, isHost, children }: Props) {
         if (resp.ok) {
           setStatus('connected');
           setErrorMessage(null);
-          // Auto-reclaim a previously chosen player identity on reconnect
-          if (!isHost) {
-            try {
-              const stored = localStorage.getItem(PLAYER_ID_KEY(code));
-              const storedId = stored ? Number(stored) : NaN;
-              if (Number.isFinite(storedId)) {
-                s.emit(
-                  'player:identify',
-                  { playerId: storedId },
-                  (idResp: AckResponse) => {
-                    if (!idResp.ok) {
-                      try {
-                        localStorage.removeItem(PLAYER_ID_KEY(code));
-                      } catch {
-                        // ignore
-                      }
-                    }
-                  },
-                );
-              }
-            } catch {
-              // ignore storage errors
-            }
-          }
         } else {
           setStatus('error');
           setErrorMessage(resp.error ?? 'failed to join room');
@@ -197,18 +171,6 @@ export function RoomProvider({ code, isHost, children }: Props) {
         }
       });
     }
-    // eslint-disable-next-line @typescript-eslint/no-shadow
-    async function identifyPlayer(playerId: number): Promise<AckResponse> {
-      const resp = await emit('player:identify', { playerId });
-      if (resp.ok) {
-        try {
-          localStorage.setItem(PLAYER_ID_KEY(code), String(playerId));
-        } catch {
-          // ignore
-        }
-      }
-      return resp;
-    }
     return {
       startRound: (type) => emit('host:start_round', { type }),
       revealClue: (clueId) => emit('host:reveal_clue', { clueId }),
@@ -221,14 +183,13 @@ export function RoomProvider({ code, isHost, children }: Props) {
       ruleCorrect: () => emit('host:rule_correct'),
       ruleIncorrect: () => emit('host:rule_incorrect'),
       cancelBuzz: () => emit('host:cancel_buzz'),
-      identifyPlayer,
+      identifyPlayer: (playerId) => emit('player:identify', { playerId }),
       buzz: () => emit('player:buzz'),
       pass: () => emit('player:pass'),
       typing: (text) => emit('player:typing', { text }),
       submit: (text) => emit('player:submit', { text }),
     };
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [code]);
+  }, []);
 
   const value = useMemo<RoomContextValue>(
     () => ({

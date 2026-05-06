@@ -14,8 +14,9 @@ function asPlayerLikes(scores: RoomScore[]) {
 }
 
 export function ScoreBoard() {
-  const { isHost, scores, lastAdjust, actions } = useRoom();
+  const { isHost, scores, lastAdjust, actions, members, socketId } = useRoom();
   const players = asPlayerLikes(scores);
+  const myPlayerId = members.find((m) => m.socketId === socketId)?.playerId ?? null;
   const prev = useRef<Map<number, number>>(new Map());
   const [flash, setFlash] = useState<Map<number, Flash>>(new Map());
   const [undoing, setUndoing] = useState(false);
@@ -91,10 +92,14 @@ export function ScoreBoard() {
                   ? 'bg-red-500/40'
                   : 'bg-white/5';
             const isPenaltyTarget = penalty.active && p.id === penalty.leaderId;
+            const isMe = p.id === myPlayerId;
+            const meClass = isMe
+              ? 'ring-2 ring-jeopardy-gold ring-offset-2 ring-offset-jeopardy-navy shadow-[0_0_12px_rgba(212,175,55,0.4)]'
+              : '';
             return (
               <li
                 key={p.id}
-                className={`flex justify-between items-center py-2 px-3 rounded transition-colors duration-500 ${flashClass}`}
+                className={`flex justify-between items-center py-2 px-3 rounded transition-colors duration-500 ${flashClass} ${meClass}`}
               >
                 <span className="text-jeopardy-cream font-medium truncate flex items-center gap-2">
                   {isPenaltyTarget && (
@@ -106,6 +111,11 @@ export function ScoreBoard() {
                     </span>
                   )}
                   {p.name}
+                  {isMe && (
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-jeopardy-navy bg-jeopardy-gold rounded px-1.5 py-0.5">
+                      You
+                    </span>
+                  )}
                 </span>
                 <span
                   className={`font-display text-xl tracking-wide tabular-nums ml-2 shrink-0 ${

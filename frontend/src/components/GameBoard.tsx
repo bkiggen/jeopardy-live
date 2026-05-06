@@ -25,6 +25,17 @@ export function GameBoard() {
     if (!allDone) wasDoneRef.current = false;
   }, [allDone, isHost, playClip]);
 
+  // Host welcome line — fires once when host lands in the room with no round.
+  // Autoplay typically allows it because the host arrived via a click on the
+  // landing page; if blocked, it'll fail silently.
+  const welcomedRef = useRef(false);
+  useEffect(() => {
+    if (isHost && !round && !welcomedRef.current) {
+      welcomedRef.current = true;
+      void playClip('welcome');
+    }
+  }, [isHost, round, playClip]);
+
   async function handleStartRound(type: 'single' | 'double') {
     setLoading(true);
     try {

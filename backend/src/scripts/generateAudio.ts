@@ -18,6 +18,12 @@ import { VOICES } from '../lib/voices.js';
 type Clip = { key: string; text: string };
 
 const CLIPS: Clip[] = [
+  // Host arrival
+  {
+    key: 'welcome',
+    text: 'This is Jeopardy! Please select Single or Double Jeopardy.',
+  },
+
   // Round transitions
   { key: 'round-single', text: "Single Jeopardy! Let's see what you've got." },
   { key: 'round-double', text: "Double Jeopardy! The stakes just doubled." },
@@ -79,12 +85,20 @@ async function generate(voiceId: string, clip: Clip, outPath: string): Promise<v
 }
 
 async function main(): Promise<void> {
-  console.log(`Generating ${CLIPS.length} clips × ${VOICES.length} voices into ${OUT_DIR}\n`);
+  // Optional positional args filter to specific clip keys, e.g.
+  //   npm run generate-audio -- welcome round-single
+  const filterKeys = new Set(process.argv.slice(2));
+  const clips = filterKeys.size > 0 ? CLIPS.filter((c) => filterKeys.has(c.key)) : CLIPS;
+  if (filterKeys.size > 0 && clips.length === 0) {
+    console.error(`No matching clip keys for: ${[...filterKeys].join(', ')}`);
+    process.exit(1);
+  }
+  console.log(`Generating ${clips.length} clips × ${VOICES.length} voices into ${OUT_DIR}\n`);
   for (const voice of VOICES) {
     const dir = join(OUT_DIR, voice.id);
     mkdirSync(dir, { recursive: true });
     console.log(`[${voice.label}]`);
-    for (const clip of CLIPS) {
+    for (const clip of clips) {
       await generate(voice.voiceId, clip, join(dir, `${clip.key}.mp3`));
     }
     console.log();

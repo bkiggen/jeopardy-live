@@ -36,6 +36,8 @@ export function AdminView({ refreshPlayers }: Props) {
   const [newTeamCode, setNewTeamCode] = useState('');
   const [newPlayerName, setNewPlayerName] = useState('');
   const [seasonName, setSeasonName] = useState(nextQuarterName());
+  const [editingTeamId, setEditingTeamId] = useState<number | null>(null);
+  const [editingTeamName, setEditingTeamName] = useState('');
 
   const [openSeasonId, setOpenSeasonId] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -104,6 +106,35 @@ export function AdminView({ refreshPlayers }: Props) {
     }
   }
 
+  function startEditingTeam(team: Team) {
+    setEditingTeamId(team.id);
+    setEditingTeamName(team.name);
+  }
+
+  function cancelEditingTeam() {
+    setEditingTeamId(null);
+    setEditingTeamName('');
+  }
+
+  async function saveTeamName(team: Team) {
+    const trimmed = editingTeamName.trim();
+    if (!trimmed || trimmed === team.name) {
+      cancelEditingTeam();
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await callProtected(() =>
+        api.updateTeam(team.id, { name: trimmed }),
+      );
+      if (result == null) return;
+      await refreshTeams();
+      cancelEditingTeam();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function addPlayer(e: React.FormEvent) {
     e.preventDefault();
     if (!newPlayerName.trim() || selectedTeamId === null) return;
@@ -162,6 +193,14 @@ export function AdminView({ refreshPlayers }: Props) {
   }
 
   async function selectVoice(voiceId: string) {
+    // Same clip every time so voices can be A/B compared.
+    try {
+      const audio = new Audio(`/audio/${voiceId}/correct-1.mp3`);
+      void audio.play();
+    } catch {
+      // preview is best effort
+    }
+    if (voiceId === settings.voice) return;
     setBusy(true);
     try {
       const result = await callProtected(() => api.setSettings({ voice: voiceId }));
@@ -200,7 +239,7 @@ export function AdminView({ refreshPlayers }: Props) {
                     type="button"
                     key={v.id}
                     onClick={() => selectVoice(v.id)}
-                    disabled={busy || active}
+                    disabled={busy}
                     className={`px-4 py-2 rounded font-bold text-sm transition-colors disabled:opacity-70 ${
                       active
                         ? 'bg-jeopardy-gold text-jeopardy-navy-deep'
@@ -274,42 +313,90 @@ export function AdminView({ refreshPlayers }: Props) {
           <ul className="flex flex-col gap-2">
             {teams.map((t) => {
               const selected = t.id === selectedTeamId;
+              const editing = t.id === editingTeamId;
               return (
                 <li
                   key={t.id}
-                  className={`flex items-center justify-between rounded px-3 py-2 ${
+                  className={`flex items-center justify-between gap-2 rounded px-3 py-2 ${
                     selected ? 'bg-jeopardy-gold/10 border border-jeopardy-gold/40' : 'bg-white/5'
                   } ${t.isActive ? '' : 'opacity-60'}`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTeamId(t.id)}
-                    className="flex-1 text-left flex items-center gap-3 min-w-0"
-                  >
-                    <span className="text-jeopardy-cream font-medium truncate">
-                      {t.name}
-                    </span>
-                    <span className="text-jeopardy-gold/70 text-xs font-mono uppercase tracking-widest">
-                      {t.code}
-                    </span>
-                    {!t.isActive && (
-                      <span className="text-jeopardy-cream/40 text-xs uppercase tracking-wide">
-                        inactive
+                  {editing ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void saveTeamName(t);
+                      }}
+                      className="flex-1 flex items-center gap-2 min-w-0"
+                    >
+                      <input
+                        type="text"
+                        value={editingTeamName}
+                        onChange={(e) => setEditingTeamName(e.target.value)}
+                        autoFocus
+                        maxLength={50}
+                        className="min-w-0 flex-1 px-2 py-1 rounded bg-white/10 text-jeopardy-cream border border-jeopardy-gold/30"
+                      />
+                      <span className="text-jeopardy-gold/70 text-xs font-mono uppercase tracking-widest shrink-0">
+                        {t.code}
                       </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleTeam(t)}
-                    disabled={busy}
-                    className={`shrink-0 ml-2 px-3 py-1 rounded text-sm disabled:opacity-50 ${
-                      t.isActive
-                        ? 'bg-red-600/40 hover:bg-red-600/70 text-white'
-                        : 'bg-green-600/40 hover:bg-green-600/70 text-white'
-                    }`}
-                  >
-                    {t.isActive ? 'Deactivate' : 'Reactivate'}
-                  </button>
+                      <button
+                        type="submit"
+                        disabled={busy}
+                        className="shrink-0 px-3 py-1 bg-jeopardy-gold text-jeopardy-navy-deep rounded text-sm font-bold disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEditingTeam}
+                        className="shrink-0 px-3 py-1 bg-white/10 text-jeopardy-cream rounded text-sm hover:bg-white/20"
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTeamId(t.id)}
+                        className="flex-1 text-left flex items-center gap-3 min-w-0"
+                      >
+                        <span className="text-jeopardy-cream font-medium truncate">
+                          {t.name}
+                        </span>
+                        <span className="text-jeopardy-gold/70 text-xs font-mono uppercase tracking-widest">
+                          {t.code}
+                        </span>
+                        {!t.isActive && (
+                          <span className="text-jeopardy-cream/40 text-xs uppercase tracking-wide">
+                            inactive
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startEditingTeam(t)}
+                        disabled={busy}
+                        className="shrink-0 px-2 py-1 text-jeopardy-cream/60 hover:text-jeopardy-cream text-sm"
+                        title="Rename team"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleTeam(t)}
+                        disabled={busy}
+                        className={`shrink-0 px-3 py-1 rounded text-sm disabled:opacity-50 ${
+                          t.isActive
+                            ? 'bg-red-600/40 hover:bg-red-600/70 text-white'
+                            : 'bg-green-600/40 hover:bg-green-600/70 text-white'
+                        }`}
+                      >
+                        {t.isActive ? 'Deactivate' : 'Reactivate'}
+                      </button>
+                    </>
+                  )}
                 </li>
               );
             })}
