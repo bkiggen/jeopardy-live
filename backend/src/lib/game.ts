@@ -68,6 +68,45 @@ export async function pickRandomCategory(
   };
 }
 
+export type FinalClue = {
+  id: number;
+  category: string;
+  question: string;
+  answer: string;
+  airDate: string | null;
+};
+
+export async function pickRandomFinal(): Promise<FinalClue | null> {
+  const picks = await prisma.$queryRaw<
+    {
+      id: number;
+      category: string;
+      question: string;
+      answer: string;
+      air_date: Date | null;
+    }[]
+  >`
+    SELECT id, category, question, answer, air_date
+    FROM clues
+    WHERE round = 'final'
+      AND category IS NOT NULL
+      AND question IS NOT NULL
+      AND answer IS NOT NULL
+      AND question NOT LIKE '%<a href%'
+    ORDER BY RANDOM()
+    LIMIT 1
+  `;
+  if (picks.length === 0) return null;
+  const c = picks[0];
+  return {
+    id: c.id,
+    category: c.category,
+    question: c.question,
+    answer: c.answer,
+    airDate: c.air_date ? c.air_date.toISOString().slice(0, 10) : null,
+  };
+}
+
 export async function adjustPlayerScore(
   playerId: number,
   teamId: number,

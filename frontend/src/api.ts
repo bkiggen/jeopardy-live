@@ -79,10 +79,34 @@ export type RoomScore = {
   score: number;
 };
 
+export type FinalPhase = 'wagering' | 'answering' | 'revealed';
+
+export type FinalEntry = {
+  wagered: boolean;
+  answered: boolean;
+  wager: number | null;
+  answer: string | null;
+  correct: boolean | null;
+  reasoning: string | null;
+};
+
+export type FinalState = {
+  clueId: number;
+  category: string;
+  question: string;
+  answer: string;
+  airDate: string | null;
+  phase: FinalPhase;
+  starting: Record<number, { name: string; score: number }>;
+  entries: Record<number, FinalEntry>;
+  answerDeadline: number | null;
+};
+
 export type RoomGameState = {
   round: GameRound | null;
   usedClueIds: number[];
   activeClue: ActiveClue | null;
+  final: FinalState | null;
 };
 
 export type RoomLastAdjust = {

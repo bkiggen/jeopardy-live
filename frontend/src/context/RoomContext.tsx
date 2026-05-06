@@ -45,6 +45,12 @@ type RoomActions = {
   typing: (text: string) => Promise<AckResponse>;
   submit: (text: string) => Promise<AckResponse>;
   endGame: () => Promise<AckResponse>;
+  startFinal: () => Promise<AckResponse>;
+  finalWager: (wager: number) => Promise<AckResponse>;
+  finalAnswer: (answer: string) => Promise<AckResponse>;
+  forceFinalAnswer: () => Promise<AckResponse>;
+  ruleFinal: (playerId: number, correct: boolean) => Promise<AckResponse>;
+  applyFinal: () => Promise<AckResponse>;
 };
 
 type RoomContextValue = {
@@ -69,6 +75,7 @@ const emptyGame: RoomGameState = {
   round: null,
   usedClueIds: [],
   activeClue: null,
+  final: null,
 };
 
 const RoomContext = createContext<RoomContextValue | null>(null);
@@ -195,6 +202,13 @@ export function RoomProvider({ code, isHost, children }: Props) {
       typing: (text) => emit('player:typing', { text }),
       submit: (text) => emit('player:submit', { text }),
       endGame: () => emit('host:end_game'),
+      startFinal: () => emit('host:start_final'),
+      finalWager: (wager) => emit('player:final_wager', { wager }),
+      finalAnswer: (answer) => emit('player:final_answer', { answer }),
+      forceFinalAnswer: () => emit('host:force_final_answer'),
+      ruleFinal: (playerId, correct) =>
+        emit('host:rule_final', { playerId, correct }),
+      applyFinal: () => emit('host:apply_final'),
     };
   }, []);
 

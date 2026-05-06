@@ -40,10 +40,36 @@ export type RoomScore = {
   score: number;
 };
 
+export type FinalPhase = 'wagering' | 'answering' | 'revealed';
+
+export type FinalEntry = {
+  wagered: boolean;          // visible to everyone — UI shows checkmark
+  answered: boolean;         // visible to everyone — UI shows checkmark
+  wager: number | null;      // visible to self/host always; everyone on revealed
+  answer: string | null;     // visible to self/host always; everyone on revealed
+  correct: boolean | null;   // judged or host-overridden; visible on revealed
+  reasoning: string | null;
+};
+
+export type FinalState = {
+  clueId: number;
+  category: string;
+  question: string;     // hidden from clients during wagering
+  answer: string;       // hidden from clients except host until revealed
+  airDate: string | null;
+  phase: FinalPhase;
+  // Snapshot of eligible players' starting scores, taken at start_final time.
+  // Used to bound wagers and to apply +/- after rulings.
+  starting: Record<number, { name: string; score: number }>;
+  entries: Record<number, FinalEntry>;
+  answerDeadline: number | null;  // ms epoch when answer phase ends
+};
+
 export type RoomGameState = {
   round: GameRound | null;
   usedClueIds: number[];
   activeClue: ActiveClue | null;
+  final: FinalState | null;
 };
 
 export type LastAdjust = {
@@ -71,10 +97,11 @@ export type Room = {
   lastAdjust: LastAdjust | null;
   hostDisconnectedAt: number | null;
   hostGraceTimer: ReturnType<typeof setTimeout> | null;
+  finalAnswerTimer: ReturnType<typeof setTimeout> | null;
 };
 
 function emptyGame(): RoomGameState {
-  return { round: null, usedClueIds: [], activeClue: null };
+  return { round: null, usedClueIds: [], activeClue: null, final: null };
 }
 
 // In-memory live-session state keyed by team code. Persistent team data
@@ -99,6 +126,7 @@ export class RoomManager {
       lastAdjust: null,
       hostDisconnectedAt: null,
       hostGraceTimer: null,
+      finalAnswerTimer: null,
     };
     this.rooms.set(code, room);
     return room;

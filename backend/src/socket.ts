@@ -7,11 +7,15 @@ import {
   type RoomScore,
   type LastAdjust,
   type ActiveClue,
+  type FinalState,
+  type FinalEntry,
+  type RoomMember,
 } from './lib/rooms.js';
 import { isValidPasscode, passcodeConfigured } from './lib/passcode.js';
 import {
   loadActiveScores,
   pickRandomCategory,
+  pickRandomFinal,
   adjustPlayerScore,
   judgeAnswerServerSide,
 } from './lib/game.js';
@@ -60,11 +64,20 @@ type ClientToServer = {
   'host:rule_incorrect': (ack: Ack) => void;
   'host:cancel_buzz': (ack: Ack) => void;
   'host:end_game': (ack: Ack) => void;
+  'host:start_final': (ack: Ack) => void;
+  'host:force_final_answer': (ack: Ack) => void;
+  'host:rule_final': (
+    payload: { playerId: number; correct: boolean },
+    ack: Ack,
+  ) => void;
+  'host:apply_final': (ack: Ack) => void;
   'player:identify': (payload: { playerId: number }, ack: Ack) => void;
   'player:buzz': (ack: Ack) => void;
   'player:pass': (ack: Ack) => void;
   'player:typing': (payload: { text: string }, ack: Ack) => void;
   'player:submit': (payload: { text: string }, ack: Ack) => void;
+  'player:final_wager': (payload: { wager: number }, ack: Ack) => void;
+  'player:final_answer': (payload: { answer: string }, ack: Ack) => void;
 };
 
 type ServerToClient = {
@@ -86,6 +99,7 @@ type AppSocket = Socket<ClientToServer, ServerToClient, Record<string, never>, S
 const RATIO = 1.5;
 const HOST_GRACE_MS = 60_000;
 const BUZZ_TIMEOUT_MS = 10_000;
+const FINAL_ANSWER_MS = 30_000;
 
 export function attachSockets(httpServer: HTTPServer): Io {
   const io: Io = new Server(httpServer, {
@@ -355,6 +369,172 @@ export function attachSockets(httpServer: HTTPServer): Io {
       room.game.round = null;
       room.game.usedClueIds = [];
       room.game.activeClue = null;
+      room.game.final = null;
+      if (room.finalAnswerTimer) {
+        clearTimeout(room.finalAnswerTimer);
+        room.finalAnswerTimer = null;
+      }
+      broadcastGameState(io, room);
+    });
+
+    socket.on('host:start_final', async (ack) => {
+      const room = requireHost(socket);
+      if (!room) return ack({ ok: false, error: 'not authorized' });
+      if (room.game.final) return ack({ ok: false, error: 'final already started' });
+
+      const clue = await pickRandomFinal();
+      if (!clue) return ack({ ok: false, error: 'no final clues available' });
+
+      // Eligibility: only players with score > 0 participate, per traditional rules.
+      const starting: Record<number, { name: string; score: number }> = {};
+      const entries: Record<number, FinalEntry> = {};
+      for (const s of room.scores) {
+        if (s.score <= 0) continue;
+        starting[s.playerId] = { name: s.name, score: s.score };
+        entries[s.playerId] = {
+          wagered: false,
+          answered: false,
+          wager: null,
+          answer: null,
+          correct: null,
+          reasoning: null,
+        };
+      }
+
+      // Wipe the regular round state so the UI snaps to Final cleanly.
+      room.game.round = null;
+      room.game.usedClueIds = [];
+      room.game.activeClue = null;
+      room.game.final = {
+        clueId: clue.id,
+        category: clue.category,
+        question: clue.question,
+        answer: clue.answer,
+        airDate: clue.airDate,
+        phase: 'wagering',
+        starting,
+        entries,
+        answerDeadline: null,
+      };
+      ack({ ok: true });
+      broadcastGameState(io, room);
+    });
+
+    socket.on('player:final_wager', (payload, ack) => {
+      const room = rooms.get(socket.data.joinedRoomCode ?? '');
+      if (!room) return ack({ ok: false, error: 'not in a room' });
+      const member = room.members.get(socket.id);
+      if (!member?.playerId) return ack({ ok: false, error: 'pick a player first' });
+      const final = room.game.final;
+      if (!final || final.phase !== 'wagering')
+        return ack({ ok: false, error: 'not accepting wagers' });
+      const start = final.starting[member.playerId];
+      if (!start) return ack({ ok: false, error: 'not eligible — score must be positive' });
+
+      const wager = Math.floor(Number(payload.wager));
+      if (!Number.isFinite(wager) || wager < 0)
+        return ack({ ok: false, error: 'wager must be ≥ 0' });
+      if (wager > start.score)
+        return ack({ ok: false, error: `wager cannot exceed your score ($${start.score})` });
+
+      const entry = final.entries[member.playerId];
+      entry.wager = wager;
+      entry.wagered = true;
+      ack({ ok: true });
+
+      // Auto-advance to answering phase when every eligible player has wagered.
+      const eligibleIds = Object.keys(final.starting).map(Number);
+      const allWagered = eligibleIds.every((id) => final.entries[id].wagered);
+      if (allWagered) startAnswerPhase(io, room);
+      else broadcastGameState(io, room);
+    });
+
+    socket.on('host:force_final_answer', (ack) => {
+      const room = requireHost(socket);
+      if (!room) return ack({ ok: false, error: 'not authorized' });
+      const final = room.game.final;
+      if (!final || final.phase !== 'wagering')
+        return ack({ ok: false, error: 'not in wagering phase' });
+      // Players who didn't wager get a $0 default so they can still answer.
+      for (const idStr of Object.keys(final.starting)) {
+        const id = Number(idStr);
+        if (!final.entries[id].wagered) {
+          final.entries[id].wager = 0;
+          final.entries[id].wagered = true;
+        }
+      }
+      ack({ ok: true });
+      startAnswerPhase(io, room);
+    });
+
+    socket.on('player:final_answer', (payload, ack) => {
+      const room = rooms.get(socket.data.joinedRoomCode ?? '');
+      if (!room) return ack({ ok: false, error: 'not in a room' });
+      const member = room.members.get(socket.id);
+      if (!member?.playerId) return ack({ ok: false, error: 'pick a player first' });
+      const final = room.game.final;
+      if (!final || final.phase !== 'answering')
+        return ack({ ok: false, error: 'not accepting answers' });
+      if (!final.starting[member.playerId])
+        return ack({ ok: false, error: 'not eligible' });
+
+      const text = String(payload.answer ?? '').trim().slice(0, 500);
+      const entry = final.entries[member.playerId];
+      entry.answer = text;
+      entry.answered = true;
+      ack({ ok: true });
+
+      const eligibleIds = Object.keys(final.starting).map(Number);
+      const allAnswered = eligibleIds.every((id) => final.entries[id].answered);
+      if (allAnswered) {
+        if (room.finalAnswerTimer) {
+          clearTimeout(room.finalAnswerTimer);
+          room.finalAnswerTimer = null;
+        }
+        void revealFinal(io, room);
+      } else {
+        broadcastGameState(io, room);
+      }
+    });
+
+    socket.on('host:rule_final', (payload, ack) => {
+      const room = requireHost(socket);
+      if (!room) return ack({ ok: false, error: 'not authorized' });
+      const final = room.game.final;
+      if (!final || final.phase !== 'revealed')
+        return ack({ ok: false, error: 'not in reveal phase' });
+      const entry = final.entries[payload.playerId];
+      if (!entry) return ack({ ok: false, error: 'player not in final' });
+      entry.correct = Boolean(payload.correct);
+      ack({ ok: true });
+      broadcastGameState(io, room);
+    });
+
+    socket.on('host:apply_final', async (ack) => {
+      const room = requireHost(socket);
+      if (!room) return ack({ ok: false, error: 'not authorized' });
+      const final = room.game.final;
+      if (!final || final.phase !== 'revealed')
+        return ack({ ok: false, error: 'not in reveal phase' });
+
+      // Apply each eligible player's wager based on the (possibly host-overridden) ruling.
+      for (const idStr of Object.keys(final.starting)) {
+        const playerId = Number(idStr);
+        const entry = final.entries[playerId];
+        if (entry.wager == null) continue;
+        const delta = entry.correct ? entry.wager : -entry.wager;
+        if (delta !== 0) {
+          await adjustPlayerScore(playerId, room.teamId, delta).catch((err) =>
+            console.error('[final] adjust failed', err),
+          );
+        }
+      }
+      try {
+        room.scores = await loadActiveScores(room.teamId);
+      } catch (err) {
+        console.error('[final] reload scores failed', err);
+      }
+      ack({ ok: true });
       broadcastGameState(io, room);
     });
 
@@ -626,6 +806,20 @@ function broadcastRoomState(io: Io, code: string): void {
 }
 
 function broadcastGameState(io: Io, room: Room): void {
+  // When a final round is in flight, redact the payload per recipient so
+  // private wagers/answers stay private until reveal time.
+  if (room.game.final) {
+    for (const member of room.members.values()) {
+      const target = io.sockets.sockets.get(member.socketId);
+      if (!target) continue;
+      target.emit('game:state', {
+        game: { ...room.game, final: viewFinal(room.game.final, member) },
+        scores: room.scores,
+        lastAdjust: room.lastAdjust,
+      });
+    }
+    return;
+  }
   io.to(room.code).emit('game:state', {
     game: room.game,
     scores: room.scores,
@@ -633,12 +827,103 @@ function broadcastGameState(io: Io, room: Room): void {
   });
 }
 
+function viewFinal(final: FinalState, member: RoomMember): FinalState {
+  const reveal = final.phase === 'revealed';
+  const isHost = member.isHost;
+  const myId = member.playerId;
+  const showQuestion = isHost || final.phase !== 'wagering';
+  const showAnswer = isHost || reveal;
+
+  const entries: Record<number, FinalEntry> = {};
+  for (const [pidStr, e] of Object.entries(final.entries)) {
+    const pid = Number(pidStr);
+    const showFull = reveal || isHost || pid === myId;
+    entries[pid] = {
+      wagered: e.wagered,
+      answered: e.answered,
+      wager: showFull ? e.wager : null,
+      answer: showFull ? e.answer : null,
+      correct: reveal ? e.correct : null,
+      reasoning: reveal ? e.reasoning : null,
+    };
+  }
+
+  return {
+    ...final,
+    question: showQuestion ? final.question : '',
+    answer: showAnswer ? final.answer : '',
+    entries,
+  };
+}
+
 function sendGameState(socket: AppSocket, room: Room): void {
+  if (room.game.final) {
+    const member = room.members.get(socket.id);
+    if (member) {
+      socket.emit('game:state', {
+        game: { ...room.game, final: viewFinal(room.game.final, member) },
+        scores: room.scores,
+        lastAdjust: room.lastAdjust,
+      });
+      return;
+    }
+  }
   socket.emit('game:state', {
     game: room.game,
     scores: room.scores,
     lastAdjust: room.lastAdjust,
   });
+}
+
+function startAnswerPhase(io: Io, room: Room): void {
+  const final = room.game.final;
+  if (!final) return;
+  final.phase = 'answering';
+  final.answerDeadline = Date.now() + FINAL_ANSWER_MS;
+  if (room.finalAnswerTimer) clearTimeout(room.finalAnswerTimer);
+  room.finalAnswerTimer = setTimeout(() => {
+    const stillThere = rooms.get(room.code);
+    if (!stillThere || stillThere !== room) return;
+    if (room.game.final?.phase !== 'answering') return;
+    void revealFinal(io, room);
+  }, FINAL_ANSWER_MS);
+  broadcastGameState(io, room);
+}
+
+async function revealFinal(io: Io, room: Room): Promise<void> {
+  const final = room.game.final;
+  if (!final) return;
+  if (room.finalAnswerTimer) {
+    clearTimeout(room.finalAnswerTimer);
+    room.finalAnswerTimer = null;
+  }
+  final.phase = 'revealed';
+  final.answerDeadline = null;
+
+  // Judge each eligible player's answer in parallel. Empty answers are
+  // automatically marked incorrect without burning a Claude call.
+  const eligibleIds = Object.keys(final.starting).map(Number);
+  await Promise.all(
+    eligibleIds.map(async (id) => {
+      const entry = final.entries[id];
+      const text = (entry.answer ?? '').trim();
+      if (!text) {
+        entry.correct = false;
+        entry.reasoning = 'No answer submitted.';
+        return;
+      }
+      const result = await judgeAnswerServerSide(final.question, final.answer, text);
+      if (result.ok) {
+        entry.correct = result.correct;
+        entry.reasoning = result.reasoning;
+      } else {
+        // If judge fails, default to incorrect with a note — host can override.
+        entry.correct = false;
+        entry.reasoning = `Judge unavailable: ${result.error}`;
+      }
+    }),
+  );
+  broadcastGameState(io, room);
 }
 
 function computeLeaderPenalty(scores: RoomScore[]): {

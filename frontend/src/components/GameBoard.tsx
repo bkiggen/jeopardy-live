@@ -3,6 +3,7 @@ import { useHostContext } from '../context/HostContext';
 import { useRoom } from '../context/RoomContext';
 import { useSettings } from '../hooks/useSettings';
 import { ClueModal } from './ClueModal';
+import { FinalJeopardy } from './FinalJeopardy';
 
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -64,6 +65,11 @@ export function GameBoard() {
     }
   }
 
+  // Final Jeopardy takes over the entire panel whenever it's in flight.
+  if (game.final) {
+    return <FinalJeopardy />;
+  }
+
   if (!round) {
     if (!isHost) {
       return (
@@ -82,7 +88,7 @@ export function GameBoard() {
         <h2 className="font-display text-jeopardy-gold text-6xl tracking-wider text-shadow-tile">
           START A ROUND
         </h2>
-        <div className="flex gap-4">
+        <div className="flex gap-4 flex-wrap justify-center">
           <button
             type="button"
             onClick={() => handleStartRound('single')}
@@ -98,6 +104,14 @@ export function GameBoard() {
             className="px-8 py-4 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-display text-2xl tracking-wide hover:bg-jeopardy-cream disabled:opacity-50 transition-colors"
           >
             Double Jeopardy
+          </button>
+          <button
+            type="button"
+            onClick={() => actions.startFinal()}
+            disabled={loading}
+            className="px-8 py-4 bg-purple-700 text-jeopardy-cream rounded font-display text-2xl tracking-wide hover:bg-purple-600 disabled:opacity-50 transition-colors"
+          >
+            Final Jeopardy
           </button>
         </div>
         {loading && <p className="text-jeopardy-cream/60 italic">Drawing a category…</p>}
@@ -130,13 +144,20 @@ export function GameBoard() {
           </div>
         )}
         {isHost && (
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap justify-center">
             <button
               type="button"
               onClick={() => actions.resetRound()}
               className="px-8 py-4 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-display text-2xl tracking-wide hover:bg-jeopardy-cream transition-colors"
             >
               Start New Round
+            </button>
+            <button
+              type="button"
+              onClick={() => actions.startFinal()}
+              className="px-8 py-4 bg-purple-700 text-jeopardy-cream rounded font-display text-2xl tracking-wide hover:bg-purple-600 transition-colors"
+            >
+              Final Jeopardy
             </button>
             <button
               type="button"
