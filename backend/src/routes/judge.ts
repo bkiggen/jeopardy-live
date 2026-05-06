@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
+import { redactAnswer } from '../lib/judge.js';
 
 const router = Router();
 
@@ -16,6 +17,16 @@ Be strict on:
 - Wrong facts, wrong people, wrong places
 - Missing key qualifiers that change meaning
 - Answers that are merely related but not the specific response
+
+CRITICAL — When you rule a player INCORRECT:
+- NEVER state, name, hint at, or partially spell the correct answer in your reasoning.
+- Do NOT say things like "the correct answer is X", "it should be X", "X is the right answer", "they meant X", or even "this refers to X".
+- Explain only why the player's specific answer is wrong: wrong category, wrong era, wrong field, wrong person type, etc.
+- Other players may still try to answer — revealing the answer ruins the round.
+- Good incorrect-reasoning: "That's a fictional character, not a historical figure." / "Wrong continent." / "Right field, wrong person."
+- Bad incorrect-reasoning: "Lady Macbeth is wrong; Cleopatra is the answer."
+
+When you rule a player CORRECT, you may reference the answer in reasoning.
 
 You MUST respond with ONLY a JSON object, no preamble, no markdown fences. Schema:
 {"correct": boolean, "reasoning": string}
@@ -85,6 +96,10 @@ router.post('/', async (req, res) => {
       raw: text,
     });
     return;
+  }
+
+  if (!parsed.correct) {
+    parsed.reasoning = redactAnswer(parsed.reasoning, correctAnswer);
   }
 
   res.json(parsed);

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app.js';
+import { redactAnswer } from '../src/lib/judge.js';
 
 describe('POST /api/judge', () => {
   let originalKey: string | undefined;
@@ -49,5 +50,39 @@ describe('POST /api/judge', () => {
       playerAnswer: 'B',
     });
     expect(res.status).toBe(503);
+  });
+});
+
+describe('redactAnswer', () => {
+  it('scrubs the full correct answer (case-insensitive)', () => {
+    const out = redactAnswer(
+      'Lady Macbeth is wrong; Cleopatra is the answer.',
+      'Cleopatra',
+    );
+    expect(out.toLowerCase()).not.toContain('cleopatra');
+  });
+
+  it('scrubs both the paren-stripped and outside-paren forms', () => {
+    const reasoning =
+      'Player said only the surname. Freddy Boom-Boom Washington was correct, but Washington alone is too vague.';
+    const out = redactAnswer(reasoning, '(Freddy Boom-Boom) Washington');
+    expect(out).not.toMatch(/Freddy Boom-Boom Washington/i);
+    expect(out).not.toMatch(/\bWashington\b/i);
+  });
+
+  it('keeps reasoning intact when answer is not present', () => {
+    const out = redactAnswer('Wrong era.', 'Galileo Galilei');
+    expect(out).toBe('Wrong era.');
+  });
+
+  it('uses word boundaries (does not over-redact substrings)', () => {
+    // correctAnswer "Mars" should NOT scrub the word "marshmallow"
+    const out = redactAnswer('Player named a marshmallow brand.', 'Mars');
+    expect(out).toContain('marshmallow');
+  });
+
+  it('handles empty inputs', () => {
+    expect(redactAnswer('', 'Cleopatra')).toBe('');
+    expect(redactAnswer('any text', '')).toBe('any text');
   });
 });
