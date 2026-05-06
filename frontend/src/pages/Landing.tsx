@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { io, type Socket } from 'socket.io-client';
 import { api, type Team } from '../api';
 import { usePasscode } from '../context/PasscodeContext';
+
+const SOCKET_URL = import.meta.env.VITE_API_URL ?? '';
 
 export function Landing() {
   const navigate = useNavigate();
@@ -24,14 +27,25 @@ export function Landing() {
 
   useEffect(() => {
     void refreshTeams();
-    // Re-poll periodically so the Host button stays in sync with whether
-    // another tab/user has already claimed host on a given team.
-    const t = setInterval(() => void refreshTeams(), 5000);
     const onFocus = () => void refreshTeams();
     window.addEventListener('focus', onFocus);
+
+    // Live host status — server emits lobby:host_changed whenever a team's
+    // host slot is claimed or released, so the Host button stays accurate
+    // without polling.
+    const s: Socket = io(SOCKET_URL || undefined, {
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
+    });
+    s.on('lobby:host_changed', (payload: { code: string; hasHost: boolean }) => {
+      setTeams((prev) =>
+        prev.map((t) => (t.code === payload.code ? { ...t, hasHost: payload.hasHost } : t)),
+      );
+    });
+
     return () => {
-      clearInterval(t);
       window.removeEventListener('focus', onFocus);
+      s.disconnect();
     };
   }, [refreshTeams]);
 

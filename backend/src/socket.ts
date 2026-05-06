@@ -72,6 +72,7 @@ type ServerToClient = {
   'room:closed': () => void;
   'room:ended': () => void;
   'game:state': (payload: GameStatePayload) => void;
+  'lobby:host_changed': (payload: { code: string; hasHost: boolean }) => void;
 };
 
 interface SocketData {
@@ -111,6 +112,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
           return ack({ ok: false, error: 'invalid passcode' });
         if (room.hostSocketId && room.hostSocketId !== socket.id)
           return ack({ ok: false, error: 'room already has a host' });
+        const wasUnclaimed = room.hostSocketId === null;
         room.hostSocketId = socket.id;
         socket.data.isHost = true;
         if (room.hostGraceTimer) {
@@ -118,6 +120,9 @@ export function attachSockets(httpServer: HTTPServer): Io {
           room.hostGraceTimer = null;
         }
         room.hostDisconnectedAt = null;
+        if (wasUnclaimed) {
+          io.emit('lobby:host_changed', { code: room.code, hasHost: true });
+        }
       }
 
       room.members.set(socket.id, {
@@ -494,6 +499,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
       if (room.hostSocketId === socket.id) {
         room.hostSocketId = null;
         room.hostDisconnectedAt = Date.now();
+        io.emit('lobby:host_changed', { code: room.code, hasHost: false });
         room.hostGraceTimer = setTimeout(() => {
           const stillThere = rooms.get(room.code);
           if (!stillThere || stillThere.hostSocketId !== null) return;

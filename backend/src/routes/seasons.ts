@@ -61,22 +61,49 @@ router.post('/', requirePasscode, async (req, res) => {
   res.status(201).json(season);
 });
 
-// PATCH /api/seasons/:id — rename a season.
+// PATCH /api/seasons/:id — rename or set as the active season.
+// Setting isActive: true deactivates all other seasons in the same transaction.
 router.patch('/:id', requirePasscode, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: 'invalid season id' });
     return;
   }
-  const { name } = req.body as { name?: string };
-  if (typeof name !== 'string' || !name.trim()) {
-    res.status(400).json({ error: 'name is required' });
+  const { name, isActive } = req.body as { name?: string; isActive?: boolean };
+  const data: { name?: string } = {};
+  if (typeof name === 'string' && name.trim()) {
+    data.name = name.trim().slice(0, 20);
+  }
+  if (Object.keys(data).length === 0 && typeof isActive !== 'boolean') {
+    res.status(400).json({ error: 'nothing to update' });
     return;
   }
-  const season = await prisma.season.update({
-    where: { id },
-    data: { name: name.trim().slice(0, 20) },
-  });
+
+  if (isActive === true) {
+    const season = await prisma.$transaction(async (tx) => {
+      await tx.season.updateMany({
+        where: { isActive: true, NOT: { id } },
+        data: { isActive: false, endDate: new Date() },
+      });
+      return tx.season.update({
+        where: { id },
+        data: { ...data, isActive: true, endDate: null },
+      });
+    });
+    res.json(season);
+    return;
+  }
+
+  if (isActive === false) {
+    const season = await prisma.season.update({
+      where: { id },
+      data: { ...data, isActive: false, endDate: new Date() },
+    });
+    res.json(season);
+    return;
+  }
+
+  const season = await prisma.season.update({ where: { id }, data });
   res.json(season);
 });
 

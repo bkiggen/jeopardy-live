@@ -216,7 +216,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(name ? { name } : {}),
     }),
-  updateSeason: (id: number, patch: { name: string }) =>
+  updateSeason: (id: number, patch: { name?: string; isActive?: boolean }) =>
     request<Season>(`/api/seasons/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),

@@ -278,6 +278,25 @@ export function AdminView({ refreshPlayers }: Props) {
       setBusy(false);
     }
   }
+  async function setActiveSeason(s: Season) {
+    if (s.isActive) return;
+    if (
+      !confirm(
+        `Make "${s.name}" the active season? New scores will accrue to it; the current active season will be deactivated.`,
+      )
+    ) return;
+    setBusy(true);
+    try {
+      const result = await callProtected(() =>
+        api.updateSeason(s.id, { isActive: true }),
+      );
+      if (result == null) return;
+      await Promise.all([refreshSeasons(), refreshPlayers()]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function deleteSeasonAt(s: Season) {
     if (s.isActive) {
       alert('Cannot delete the active season — start a new one first.');
@@ -769,6 +788,17 @@ export function AdminView({ refreshPlayers }: Props) {
                       {openSeasonId === s.id ? '▼' : '▸'}
                     </span>
                   </button>
+                  {!s.isActive && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveSeason(s)}
+                      disabled={busy}
+                      className="shrink-0 px-2 py-1 text-xs uppercase tracking-widest bg-jeopardy-gold/20 text-jeopardy-gold hover:bg-jeopardy-gold/40 rounded disabled:opacity-50"
+                      title="Make this the active season"
+                    >
+                      Set active
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => startEditingSeason(s)}
