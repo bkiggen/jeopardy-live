@@ -20,8 +20,14 @@ vercel login
 
 Have your secrets ready:
 - `APP_PASSCODE` — the host passcode you use locally (e.g. `olio`)
-- `ANTHROPIC_API_KEY` — from console.anthropic.com
-- `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID` — from elevenlabs.io
+- `ANTHROPIC_API_KEY` — from console.anthropic.com (used live for clue judging)
+
+> **ElevenLabs is local-only now.** The runtime plays pre-generated MP3s
+> committed under `frontend/public/audio/`, so you don't need ElevenLabs
+> credentials in production. To regenerate the clips locally with a
+> different voice, set `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID` in
+> `backend/.env` and run `npm run generate-audio` from the backend dir,
+> then commit the resulting mp3 files.
 
 ---
 
@@ -60,8 +66,6 @@ fly secrets set \
   DATABASE_URL='paste-the-neon-connection-string-here' \
   APP_PASSCODE='your-passcode' \
   ANTHROPIC_API_KEY='sk-ant-...' \
-  ELEVENLABS_API_KEY='sk_...' \
-  ELEVENLABS_VOICE_ID='your-voice-id' \
   CORS_ORIGIN='https://your-vercel-domain.vercel.app'
 ```
 
@@ -193,7 +197,7 @@ For a hackathon, manual is fine.
 | Fly.io | $5/mo trial credit + small free tier | ~$3/mo for `shared-cpu-1x` 512mb |
 | Neon | 3GB storage, generous compute | Negligible |
 | Anthropic | Pay-as-you-go | ~$0.001 per clue judged with Haiku 4.5 |
-| ElevenLabs | 10K chars/mo free, $22/mo Creator | Free tier burns fast at standup cadence |
+| ElevenLabs | One-time generation only | $0 ongoing — clips are committed and served as static files |
 
 Daily standup play (~5 clues × 5 days × 4 weeks = 100 clues/mo) is well under the trial credits. Heavy use, you're looking at $5-10/mo total.
 
@@ -203,7 +207,7 @@ Daily standup play (~5 clues × 5 days × 4 weeks = 100 clues/mo) is well under 
 
 **`fly deploy` fails on Prisma migrations** — likely DATABASE_URL is wrong or Neon's connection requires `?sslmode=require` (it does; make sure your URL has it).
 
-**`speak` returns 502 in production but works locally** — ElevenLabs voice ID is per-account; make sure the voice you cloned/added is in the same account whose API key you're using.
+**Audio doesn't play on the host's machine** — clips are served from `frontend/public/audio/`. Make sure the mp3 files are committed (run `cd backend && npm run generate-audio` if they're missing). Browser may block audio until first user gesture; clicking a tile counts.
 
 **Sockets connect but immediately disconnect** — almost always CORS. Check `fly logs` for an error mentioning the origin.
 

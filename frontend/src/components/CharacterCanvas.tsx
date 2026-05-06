@@ -6,7 +6,7 @@ const H = 400;
 
 export function CharacterCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { amplitude, isSpeaking } = useHostContext();
+  const { amplitude, isPlaying } = useHostContext();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -46,11 +46,11 @@ export function CharacterCanvas() {
     ctx.font = '14px system-ui';
     ctx.textAlign = 'center';
     ctx.fillText(
-      isSpeaking ? 'speaking…' : 'host (placeholder sprite)',
+      isPlaying ? 'speaking…' : 'host (placeholder sprite)',
       W / 2,
       H - 16,
     );
-  }, [amplitude, isSpeaking]);
+  }, [amplitude, isPlaying]);
 
   return (
     <canvas

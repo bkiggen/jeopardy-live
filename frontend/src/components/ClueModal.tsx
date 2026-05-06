@@ -2,16 +2,33 @@ import { useMemo, useState } from 'react';
 import { useHostContext } from '../context/HostContext';
 import { useRoom } from '../context/RoomContext';
 import { leaderPenalty } from '../lib/penalty';
+import type { SoundClip } from '../hooks/useHost';
 
 type Pending = NonNullable<
   NonNullable<ReturnType<typeof useRoom>['game']['activeClue']>['pendingJudgement']
 >;
 
 export function ClueModal() {
-  const { speak } = useHostContext();
+  const { playClip } = useHostContext();
   const { isHost, game, members, scores, socketId, actions } = useRoom();
   const clue = game.activeClue;
   if (!clue) return null;
+
+  async function ruleCorrect() {
+    const resp = await actions.ruleCorrect();
+    if (resp.ok) void playClip('correct');
+  }
+
+  async function ruleIncorrect() {
+    const wasPenalty =
+      clue?.pendingJudgement?.playerId !== undefined &&
+      penaltyLeader === clue.pendingJudgement.playerId;
+    const resp = await actions.ruleIncorrect();
+    if (resp.ok) {
+      const clip: SoundClip = wasPenalty ? 'penalty' : 'incorrect';
+      void playClip(clip);
+    }
+  }
 
   const me = socketId ? members.find((m) => m.socketId === socketId) : null;
   const myPlayerId = me?.playerId ?? null;
@@ -99,13 +116,6 @@ export function ClueModal() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => speak(clue.question)}
-                className="px-3 py-1.5 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm"
-              >
-                ↻ Re-read
-              </button>
-              <button
-                type="button"
                 onClick={() => actions.revealAnswer()}
                 className="px-3 py-1.5 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm"
               >
@@ -130,8 +140,8 @@ export function ClueModal() {
             <HostVerdict
               pending={pending}
               clueValue={clue.value}
-              onCorrect={() => actions.ruleCorrect()}
-              onIncorrect={() => actions.ruleIncorrect()}
+              onCorrect={ruleCorrect}
+              onIncorrect={ruleIncorrect}
               penaltyLeaderId={penaltyLeader}
             />
           ) : (

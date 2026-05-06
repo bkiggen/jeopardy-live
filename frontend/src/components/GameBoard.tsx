@@ -1,22 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useHostContext } from '../context/HostContext';
 import { useRoom } from '../context/RoomContext';
 import { ClueModal } from './ClueModal';
 
 export function GameBoard() {
-  const { speak } = useHostContext();
+  const { playClip } = useHostContext();
   const { isHost, game, scores, actions } = useRoom();
   const [loading, setLoading] = useState(false);
 
   const round = game.round;
   const usedClueIds = new Set(game.usedClueIds);
   const activeClue = game.activeClue;
+  const allDone = round !== null && round.clues.every((c) => usedClueIds.has(c.id));
+
+  // Round-complete sting — host only, fires once on transition
+  const wasDoneRef = useRef(false);
+  useEffect(() => {
+    if (allDone && !wasDoneRef.current) {
+      wasDoneRef.current = true;
+      if (isHost) void playClip('round-complete');
+    }
+    if (!allDone) wasDoneRef.current = false;
+  }, [allDone, isHost, playClip]);
 
   async function handleStartRound(type: 'single' | 'double') {
     setLoading(true);
     try {
       const resp = await actions.startRound(type);
-      if (!resp.ok) {
+      if (resp.ok) {
+        void playClip(type === 'single' ? 'round-single' : 'round-double');
+      } else {
         console.error('start round failed:', resp.error);
       }
     } finally {
@@ -24,14 +37,10 @@ export function GameBoard() {
     }
   }
 
-  async function handlePickClue(clueId: number, question: string) {
+  async function handlePickClue(clueId: number) {
     if (!isHost) return;
     const resp = await actions.revealClue(clueId);
-    if (resp.ok) {
-      void speak(question);
-    } else {
-      console.error('reveal clue failed:', resp.error);
-    }
+    if (!resp.ok) console.error('reveal clue failed:', resp.error);
   }
 
   if (!round) {
@@ -74,8 +83,6 @@ export function GameBoard() {
       </div>
     );
   }
-
-  const allDone = round.clues.every((c) => usedClueIds.has(c.id));
 
   if (allDone) {
     const ranking = [...scores].sort((a, b) => b.score - a.score);
@@ -135,7 +142,7 @@ export function GameBoard() {
                 type="button"
                 key={c.id}
                 disabled={!interactive}
-                onClick={() => handlePickClue(c.id, c.question)}
+                onClick={() => handlePickClue(c.id)}
                 className={`rounded-lg font-display tracking-wider h-40 flex items-center justify-center transition-all duration-150 ${
                   used
                     ? 'bg-jeopardy-navy-darker/60 text-transparent cursor-not-allowed'
