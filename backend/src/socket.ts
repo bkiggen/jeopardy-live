@@ -385,11 +385,12 @@ export function attachSockets(httpServer: HTTPServer): Io {
       const clue = await pickRandomFinal();
       if (!clue) return ack({ ok: false, error: 'no final clues available' });
 
-      // Eligibility: only players with score > 0 participate, per traditional rules.
+      // Eligibility: every active player on the team participates. Max wager
+      // is capped at max(score, 0) — players sitting at $0 or below can still
+      // play but can only wager $0.
       const starting: Record<number, { name: string; score: number }> = {};
       const entries: Record<number, FinalEntry> = {};
       for (const s of room.scores) {
-        if (s.score <= 0) continue;
         starting[s.playerId] = { name: s.name, score: s.score };
         entries[s.playerId] = {
           wagered: false,
@@ -399,6 +400,9 @@ export function attachSockets(httpServer: HTTPServer): Io {
           correct: null,
           reasoning: null,
         };
+      }
+      if (Object.keys(starting).length === 0) {
+        return ack({ ok: false, error: 'no players on this team' });
       }
 
       // Wipe the regular round state so the UI snaps to Final cleanly.
@@ -432,10 +436,11 @@ export function attachSockets(httpServer: HTTPServer): Io {
       if (!start) return ack({ ok: false, error: 'not eligible — score must be positive' });
 
       const wager = Math.floor(Number(payload.wager));
+      const maxWager = Math.max(start.score, 0);
       if (!Number.isFinite(wager) || wager < 0)
         return ack({ ok: false, error: 'wager must be ≥ 0' });
-      if (wager > start.score)
-        return ack({ ok: false, error: `wager cannot exceed your score ($${start.score})` });
+      if (wager > maxWager)
+        return ack({ ok: false, error: `wager cannot exceed $${maxWager}` });
 
       const entry = final.entries[member.playerId];
       entry.wager = wager;

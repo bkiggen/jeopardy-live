@@ -6,6 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 export type SoundClip =
   | 'welcome'
+  | 'final-intro'
   | 'round-single'
   | 'round-double'
   | 'round-complete'
@@ -16,6 +17,13 @@ export type SoundClip =
 
 const VARIANTS: Partial<Record<SoundClip, string[]>> = {
   welcome: ['welcome', 'welcome-2', 'welcome-3', 'welcome-4', 'welcome-5'],
+  'final-intro': [
+    'final-intro',
+    'final-intro-2',
+    'final-intro-3',
+    'final-intro-4',
+    'final-intro-5',
+  ],
   'round-single': [
     'round-single',
     'round-single-2',

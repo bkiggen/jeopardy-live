@@ -26,6 +26,30 @@ const CLIPS: Clip[] = [
   { key: 'welcome-4', text: 'Hello and welcome to Jeopardy! Single or Double Jeopardy?' },
   { key: 'welcome-5', text: 'Live from the Jeopardy stage — choose your round: Single or Double.' },
 
+  // Final Jeopardy intro — fires when the host kicks off the final round.
+  {
+    key: 'final-intro',
+    text:
+      'Contestants, here is your category for Final Jeopardy. Please place your wagers.',
+  },
+  {
+    key: 'final-intro-2',
+    text: "Players, here's your Final Jeopardy category. Time to place your wagers.",
+  },
+  {
+    key: 'final-intro-3',
+    text:
+      'And now for Final Jeopardy. Take a look at the category, then enter your wagers.',
+  },
+  {
+    key: 'final-intro-4',
+    text: "Here's your category for Final Jeopardy. Make your wager.",
+  },
+  {
+    key: 'final-intro-5',
+    text: 'Final Jeopardy, everyone. The category is up — now lock in your wagers.',
+  },
+
   // Round transitions
   { key: 'round-single', text: "Single Jeopardy! Let's see what you've got." },
   { key: 'round-single-2', text: "Here's the Single Jeopardy round. Good luck." },

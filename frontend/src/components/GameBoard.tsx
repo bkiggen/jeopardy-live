@@ -107,7 +107,10 @@ export function GameBoard() {
           </button>
           <button
             type="button"
-            onClick={() => actions.startFinal()}
+            onClick={async () => {
+              const resp = await actions.startFinal();
+              if (resp.ok) void playClip('final-intro');
+            }}
             disabled={loading}
             className="px-8 py-4 bg-purple-700 text-jeopardy-cream rounded font-display text-2xl tracking-wide hover:bg-purple-600 disabled:opacity-50 transition-colors"
           >
@@ -154,7 +157,10 @@ export function GameBoard() {
             </button>
             <button
               type="button"
-              onClick={() => actions.startFinal()}
+              onClick={async () => {
+              const resp = await actions.startFinal();
+              if (resp.ok) void playClip('final-intro');
+            }}
               className="px-8 py-4 bg-purple-700 text-jeopardy-cream rounded font-display text-2xl tracking-wide hover:bg-purple-600 transition-colors"
             >
               Final Jeopardy
