@@ -7,10 +7,11 @@ import seasonsRouter from './routes/seasons.js';
 import hostRouter from './routes/host.js';
 import judgeRouter from './routes/judge.js';
 import roomsRouter from './routes/rooms.js';
+import { corsOrigin } from './lib/cors.js';
 
 export function createApp() {
   const app = express();
-  app.use(cors());
+  app.use(cors({ origin: corsOrigin() }));
   app.use(express.json());
 
   app.get('/health', (_req, res) => {

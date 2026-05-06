@@ -1,0 +1,18 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+
+# Test infra
+test
+vitest.config.ts
+
+# OS / IDE
+.DS_Store
+.idea
+.vscode
+
+# Prisma migrations come in via the prisma/ copy in Dockerfile

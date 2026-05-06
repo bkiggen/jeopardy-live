@@ -15,6 +15,7 @@ import {
   adjustPlayerScore,
   judgeAnswerServerSide,
 } from './lib/game.js';
+import { corsOrigin } from './lib/cors.js';
 
 type JoinPayload = { code: string; isHost: boolean; passcode?: string };
 type Ack = (resp: { ok: boolean; error?: string }) => void;
@@ -80,7 +81,7 @@ const HOST_GRACE_MS = 60_000;
 
 export function attachSockets(httpServer: HTTPServer): Io {
   const io: Io = new Server(httpServer, {
-    cors: { origin: true, credentials: true },
+    cors: { origin: corsOrigin(), credentials: true },
   });
 
   io.on('connection', (socket) => {
