@@ -35,6 +35,23 @@ describe('GET /api/players', () => {
   });
 });
 
+describe('GET /api/players?all=true', () => {
+  it('includes deactivated players', async () => {
+    const created = await request(app).post('/api/players').send({ name: name('hidden') });
+    await request(app)
+      .patch(`/api/players/${created.body.id}`)
+      .send({ isActive: false });
+
+    const activeOnly = await request(app).get('/api/players');
+    expect(activeOnly.body.find((p: { id: number }) => p.id === created.body.id)).toBeUndefined();
+
+    const all = await request(app).get('/api/players?all=true');
+    const found = all.body.find((p: { id: number }) => p.id === created.body.id);
+    expect(found).toBeDefined();
+    expect(found.isActive).toBe(false);
+  });
+});
+
 describe('PATCH /api/players/:id', () => {
   it('deactivates a player so they fall out of GET /api/players', async () => {
     const created = await request(app).post('/api/players').send({ name: name('toggle') });
@@ -48,6 +65,21 @@ describe('PATCH /api/players/:id', () => {
 
     const list = await request(app).get('/api/players');
     expect(list.body.find((p: { id: number }) => p.id === playerId)).toBeUndefined();
+  });
+
+  it('reactivates a deactivated player back into the active list', async () => {
+    const created = await request(app).post('/api/players').send({ name: name('revive') });
+    const playerId = created.body.id;
+
+    await request(app).patch(`/api/players/${playerId}`).send({ isActive: false });
+    const reactivated = await request(app)
+      .patch(`/api/players/${playerId}`)
+      .send({ isActive: true });
+    expect(reactivated.status).toBe(200);
+    expect(reactivated.body.isActive).toBe(true);
+
+    const list = await request(app).get('/api/players');
+    expect(list.body.find((p: { id: number }) => p.id === playerId)).toBeDefined();
   });
 
   it('400s when isActive is missing', async () => {

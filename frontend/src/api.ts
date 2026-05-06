@@ -55,7 +55,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  getPlayers: () => request<Player[]>('/api/players'),
+  getPlayers: (opts?: { all?: boolean }) =>
+    request<Player[]>(`/api/players${opts?.all ? '?all=true' : ''}`),
   addPlayer: (name: string) =>
     request<Player>('/api/players', { method: 'POST', body: JSON.stringify({ name }) }),
   togglePlayer: (id: number, isActive: boolean) =>

@@ -1,24 +1,24 @@
 import { useState } from 'react';
-import { api, type Clue, type Player } from '../api';
+import type { Clue, Player } from '../api';
 import { useHostContext } from '../context/HostContext';
 
 type Props = {
   clue: Clue;
   players: Player[];
-  onScored: () => Promise<void>;
+  award: (playerId: number, delta: number) => Promise<void>;
   onClose: () => void;
 };
 
-export function ClueModal({ clue, players, onScored, onClose }: Props) {
+export function ClueModal({ clue, players, award, onClose }: Props) {
   const { speak } = useHostContext();
   const [revealed, setRevealed] = useState(false);
   const [scoringId, setScoringId] = useState<number | null>(null);
 
-  async function award(playerId: number, delta: number) {
+  async function handleAward(playerId: number, delta: number) {
     setScoringId(playerId);
     try {
-      await api.adjustScore(playerId, delta);
-      await onScored();
+      await award(playerId, delta);
+      onClose();
     } finally {
       setScoringId(null);
     }
@@ -97,7 +97,7 @@ export function ClueModal({ clue, players, onScored, onClose }: Props) {
                     <button
                       type="button"
                       disabled={scoringId !== null}
-                      onClick={() => award(p.id, clue.value)}
+                      onClick={() => handleAward(p.id, clue.value)}
                       className="px-2 py-1 bg-green-600/40 hover:bg-green-600/70 text-white rounded text-sm font-mono disabled:opacity-40"
                     >
                       +{clue.value}
@@ -105,7 +105,7 @@ export function ClueModal({ clue, players, onScored, onClose }: Props) {
                     <button
                       type="button"
                       disabled={scoringId !== null}
-                      onClick={() => award(p.id, -clue.value)}
+                      onClick={() => handleAward(p.id, -clue.value)}
                       className="px-2 py-1 bg-red-600/40 hover:bg-red-600/70 text-white rounded text-sm font-mono disabled:opacity-40"
                     >
                       −{clue.value}

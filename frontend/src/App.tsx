@@ -7,14 +7,20 @@ import { api, type Player } from './api';
 
 type View = 'game' | 'admin';
 
+export type LastAdjust = {
+  playerId: number;
+  playerName: string;
+  delta: number;
+};
+
 function App() {
   const [view, setView] = useState<View>('game');
   const [players, setPlayers] = useState<Player[]>([]);
+  const [lastAdjust, setLastAdjust] = useState<LastAdjust | null>(null);
 
   const refreshPlayers = useCallback(async () => {
     try {
-      const next = await api.getPlayers();
-      setPlayers(next);
+      setPlayers(await api.getPlayers());
     } catch (err) {
       console.error('failed to load players', err);
     }
@@ -23,6 +29,27 @@ function App() {
   useEffect(() => {
     void refreshPlayers();
   }, [refreshPlayers]);
+
+  const award = useCallback(
+    async (playerId: number, delta: number) => {
+      const player = players.find((p) => p.id === playerId);
+      await api.adjustScore(playerId, delta);
+      setLastAdjust({
+        playerId,
+        playerName: player?.name ?? `Player ${playerId}`,
+        delta,
+      });
+      await refreshPlayers();
+    },
+    [players, refreshPlayers],
+  );
+
+  const undo = useCallback(async () => {
+    if (!lastAdjust) return;
+    await api.adjustScore(lastAdjust.playerId, -lastAdjust.delta);
+    setLastAdjust(null);
+    await refreshPlayers();
+  }, [lastAdjust, refreshPlayers]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -54,13 +81,13 @@ function App() {
             <CharacterCanvas />
           </div>
           {view === 'game' ? (
-            <GameBoard players={players} refreshPlayers={refreshPlayers} />
+            <GameBoard players={players} award={award} />
           ) : (
-            <AdminView players={players} refreshPlayers={refreshPlayers} />
+            <AdminView refreshPlayers={refreshPlayers} />
           )}
         </section>
         <aside>
-          <ScoreBoard players={players} />
+          <ScoreBoard players={players} lastAdjust={lastAdjust} onUndo={undo} />
         </aside>
       </main>
     </div>

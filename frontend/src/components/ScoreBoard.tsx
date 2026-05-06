@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Player } from '../api';
+import type { LastAdjust } from '../App';
 
 type Flash = 'up' | 'down' | undefined;
 
 type Props = {
   players: Player[];
+  lastAdjust: LastAdjust | null;
+  onUndo: () => Promise<void>;
 };
 
-export function ScoreBoard({ players }: Props) {
+export function ScoreBoard({ players, lastAdjust, onUndo }: Props) {
   const prev = useRef<Map<number, number>>(new Map());
   const [flash, setFlash] = useState<Map<number, Flash>>(new Map());
+  const [undoing, setUndoing] = useState(false);
 
   useEffect(() => {
     const next = new Map<number, Flash>();
@@ -33,9 +37,35 @@ export function ScoreBoard({ players }: Props) {
     prev.current = m;
   }, [players]);
 
+  async function handleUndo() {
+    setUndoing(true);
+    try {
+      await onUndo();
+    } finally {
+      setUndoing(false);
+    }
+  }
+
   return (
-    <div className="rounded-lg bg-jeopardy-navy p-4 h-full">
-      <h2 className="text-jeopardy-gold text-lg font-bold mb-3">SCORES</h2>
+    <div className="rounded-lg bg-jeopardy-navy p-4 h-full flex flex-col gap-3">
+      <h2 className="text-jeopardy-gold text-lg font-bold">SCORES</h2>
+
+      {lastAdjust && (
+        <button
+          type="button"
+          onClick={handleUndo}
+          disabled={undoing}
+          className="text-sm px-3 py-2 bg-white/10 hover:bg-white/20 text-jeopardy-cream rounded flex items-center justify-between disabled:opacity-50"
+        >
+          <span>↶ Undo</span>
+          <span className="text-jeopardy-cream/70">
+            {lastAdjust.delta >= 0 ? '+' : '−'}$
+            {Math.abs(lastAdjust.delta).toLocaleString()} {lastAdjust.delta >= 0 ? 'to' : 'from'}{' '}
+            {lastAdjust.playerName}
+          </span>
+        </button>
+      )}
+
       {players.length === 0 ? (
         <p className="text-jeopardy-cream/60 text-sm">
           No active players. Add some in the Admin tab.

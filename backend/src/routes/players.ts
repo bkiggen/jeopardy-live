@@ -4,16 +4,18 @@ import { ensureScore, requireActiveSeason } from '../lib/season.js';
 
 const router = Router();
 
-// GET /api/players — active players + their score for the active season
-router.get('/', async (_req, res) => {
+// GET /api/players — active players + their score for the active season.
+// Pass ?all=true to include deactivated players (used by the admin view).
+router.get('/', async (req, res) => {
   const season = await requireActiveSeason().catch(() => null);
   if (!season) {
     res.status(409).json({ error: 'no active season' });
     return;
   }
 
+  const includeInactive = req.query.all === 'true';
   const players = await prisma.player.findMany({
-    where: { isActive: true },
+    where: includeInactive ? {} : { isActive: true },
     orderBy: { id: 'asc' },
     include: {
       scores: { where: { seasonId: season.id } },

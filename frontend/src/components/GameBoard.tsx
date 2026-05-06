@@ -7,10 +7,10 @@ type Round = 'single' | 'double';
 
 type Props = {
   players: Player[];
-  refreshPlayers: () => Promise<void>;
+  award: (playerId: number, delta: number) => Promise<void>;
 };
 
-export function GameBoard({ players, refreshPlayers }: Props) {
+export function GameBoard({ players, award }: Props) {
   const { speak } = useHostContext();
   const [round, setRound] = useState<RoundData | null>(null);
   const [usedClueIds, setUsedClueIds] = useState<Set<number>>(new Set());
@@ -33,14 +33,6 @@ export function GameBoard({ players, refreshPlayers }: Props) {
   function pickClue(clue: Clue) {
     setActiveClue(clue);
     void speak(clue.question);
-  }
-
-  async function handleScored() {
-    await refreshPlayers();
-    if (activeClue) {
-      setUsedClueIds((prev) => new Set(prev).add(activeClue.id));
-    }
-    setActiveClue(null);
   }
 
   function closeClue() {
@@ -89,7 +81,7 @@ export function GameBoard({ players, refreshPlayers }: Props) {
           onClick={() => setRound(null)}
           className="px-6 py-3 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold hover:bg-jeopardy-gold/80"
         >
-          Start New Round
+            Start New Round
         </button>
       </div>
     );
@@ -132,7 +124,7 @@ export function GameBoard({ players, refreshPlayers }: Props) {
         <ClueModal
           clue={activeClue}
           players={players}
-          onScored={handleScored}
+          award={award}
           onClose={closeClue}
         />
       )}
