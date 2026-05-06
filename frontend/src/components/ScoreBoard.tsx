@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Player } from '../api';
 import type { LastAdjust } from '../App';
+import { leaderPenalty } from '../lib/penalty';
 
 type Flash = 'up' | 'down' | undefined;
 
@@ -14,6 +15,8 @@ export function ScoreBoard({ players, lastAdjust, onUndo }: Props) {
   const prev = useRef<Map<number, number>>(new Map());
   const [flash, setFlash] = useState<Map<number, Flash>>(new Map());
   const [undoing, setUndoing] = useState(false);
+
+  const penalty = useMemo(() => leaderPenalty(players), [players]);
 
   useEffect(() => {
     const next = new Map<number, Flash>();
@@ -82,12 +85,21 @@ export function ScoreBoard({ players, lastAdjust, onUndo }: Props) {
                 : f === 'down'
                   ? 'bg-red-500/40'
                   : 'bg-white/5';
+            const isPenaltyTarget = penalty.active && p.id === penalty.leaderId;
             return (
               <li
                 key={p.id}
                 className={`flex justify-between items-center py-2 px-3 rounded transition-colors duration-500 ${flashClass}`}
               >
-                <span className="text-jeopardy-cream font-medium truncate">
+                <span className="text-jeopardy-cream font-medium truncate flex items-center gap-2">
+                  {isPenaltyTarget && (
+                    <span
+                      className="text-yellow-400 text-xs"
+                      title={`Wrong answers deduct points until score < $${penalty.threshold.toLocaleString()}`}
+                    >
+                      ⚡
+                    </span>
+                  )}
                   {p.name}
                 </span>
                 <span
@@ -101,6 +113,12 @@ export function ScoreBoard({ players, lastAdjust, onUndo }: Props) {
             );
           })}
         </ul>
+      )}
+
+      {penalty.active && (
+        <p className="text-yellow-300/70 text-[10px] uppercase tracking-widest border-t border-jeopardy-gold/20 pt-2">
+          ⚡ Leader penalty active — wrong answers deduct
+        </p>
       )}
     </div>
   );

@@ -80,7 +80,37 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(name ? { name } : {}),
     }),
+  judge: (input: { question: string; correctAnswer: string; playerAnswer: string }) =>
+    request<{ correct: boolean; reasoning: string }>('/api/judge', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 };
+
+export type JudgeOutcome =
+  | { kind: 'correct'; reasoning: string }
+  | { kind: 'incorrect'; reasoning: string }
+  | { kind: 'unavailable'; message: string };
+
+export async function judgeAnswer(input: {
+  question: string;
+  correctAnswer: string;
+  playerAnswer: string;
+}): Promise<JudgeOutcome> {
+  try {
+    const result = await api.judge(input);
+    return { kind: result.correct ? 'correct' : 'incorrect', reasoning: result.reasoning };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('503')) {
+      return {
+        kind: 'unavailable',
+        message: 'Judge unavailable — set ANTHROPIC_API_KEY in backend/.env. Falling back to manual scoring.',
+      };
+    }
+    return { kind: 'unavailable', message: `Judge failed: ${msg}` };
+  }
+}
 
 export function stripHtml(s: string): string {
   return s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
