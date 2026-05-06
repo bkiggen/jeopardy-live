@@ -3,50 +3,89 @@ import { useHostContext } from '../context/HostContext';
 import { useRoom } from '../context/RoomContext';
 import { leaderPenalty } from '../lib/penalty';
 
+type Pending = NonNullable<
+  NonNullable<ReturnType<typeof useRoom>['game']['activeClue']>['pendingJudgement']
+>;
+
 export function ClueModal() {
-  const { isHost, game, members, socketId, actions } = useRoom();
-  const clue = game.activeClue;
-  if (!clue) return null;
-
-  return isHost ? (
-    <HostClueModal />
-  ) : (
-    <PlayerClueModal members={members} socketId={socketId} actions={actions} />
-  );
-}
-
-function HostClueModal() {
   const { speak } = useHostContext();
-  const { game, scores, actions } = useRoom();
+  const { isHost, game, members, scores, socketId, actions } = useRoom();
   const clue = game.activeClue;
   if (!clue) return null;
 
+  const me = socketId ? members.find((m) => m.socketId === socketId) : null;
+  const myPlayerId = me?.playerId ?? null;
+
+  const lockedOut = myPlayerId !== null && clue.lockedOutPlayerIds.includes(myPlayerId);
+  const isMyBuzz = myPlayerId !== null && clue.buzzedPlayerId === myPlayerId;
+  const someoneElseBuzzed =
+    clue.buzzedPlayerId !== null && clue.buzzedPlayerId !== myPlayerId;
+  const buzzerOpen =
+    !clue.revealed && !clue.pendingJudgement && clue.buzzedPlayerId === null;
   const pending = clue.pendingJudgement;
-  const buzzedPlayer = useMemo(
-    () =>
-      clue.buzzedPlayerId !== null
-        ? scores.find((s) => s.playerId === clue.buzzedPlayerId) ?? null
-        : null,
-    [clue.buzzedPlayerId, scores],
-  );
+  const buzzedName =
+    clue.buzzedPlayerId !== null
+      ? scores.find((s) => s.playerId === clue.buzzedPlayerId)?.name ?? 'Someone'
+      : null;
 
   const penalty = useMemo(
     () =>
       leaderPenalty(scores.map((s) => ({ id: s.playerId, score: s.score }))),
     [scores],
   );
-
   const penaltyLeader = penalty.active ? penalty.leaderId : null;
 
+  const canBuzz = myPlayerId !== null && buzzerOpen && !lockedOut;
+  const onClose = isHost ? () => actions.closeClue() : undefined;
+
   return (
-    <ModalShell onClose={() => actions.closeClue()} clueValue={clue.value} revealed={clue.revealed} answer={clue.answer} question={clue.question}>
+    <ModalShell
+      clueValue={clue.value}
+      revealed={clue.revealed}
+      answer={clue.answer}
+      question={clue.question}
+      onClose={onClose}
+    >
       <div className="px-6 py-4 border-t-2 border-jeopardy-gold/40 flex flex-col gap-3">
-        {/* Awaiting buzz */}
-        {!buzzedPlayer && !pending && (
+        {/* Player buzz button — anyone with identity who isn't locked out */}
+        {canBuzz && (
+          <button
+            type="button"
+            onClick={() => actions.buzz()}
+            className="w-full py-8 bg-red-600 hover:bg-red-500 active:scale-95 transition-all rounded-lg font-display text-jeopardy-cream text-5xl tracking-[0.4em] shadow-lg"
+          >
+            BUZZ
+          </button>
+        )}
+
+        {/* Locked-out player */}
+        {myPlayerId !== null && lockedOut && !pending && !isMyBuzz && (
+          <p className="text-red-300/70 italic text-center text-sm">
+            You're locked out for this clue.
+          </p>
+        )}
+
+        {/* I'm typing my answer */}
+        {isMyBuzz && !pending && <MyAnswerInput actions={actions} />}
+
+        {/* Someone else is typing — watch panel */}
+        {someoneElseBuzzed && !pending && (
+          <BuzzedPanel
+            name={buzzedName ?? 'Someone'}
+            typing={clue.typingAnswer}
+            isHost={isHost}
+            onCancel={() => actions.cancelBuzz()}
+          />
+        )}
+
+        {/* Awaiting buzz — host control row (always present for host) */}
+        {isHost && buzzerOpen && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-col gap-1">
               <p className="text-jeopardy-cream/70 text-sm">
-                Waiting for someone to buzz in…
+                {canBuzz
+                  ? 'You can buzz, or wait for someone else.'
+                  : 'Waiting for someone to buzz in…'}
               </p>
               {clue.lockedOutPlayerIds.length > 0 && (
                 <p className="text-jeopardy-cream/40 text-xs">
@@ -83,28 +122,7 @@ function HostClueModal() {
           </div>
         )}
 
-        {/* Buzzed, typing */}
-        {buzzedPlayer && !pending && (
-          <div className="bg-blue-500/20 border border-blue-400/40 rounded p-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-blue-300 font-bold text-sm uppercase tracking-widest mb-1">
-                {buzzedPlayer.name} buzzed in
-              </p>
-              <p className="text-jeopardy-cream text-sm font-mono">
-                {clue.typingAnswer || <span className="opacity-40">typing…</span>}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => actions.cancelBuzz()}
-              className="px-3 py-1.5 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm shrink-0"
-            >
-              Cancel buzz
-            </button>
-          </div>
-        )}
-
-        {/* Judging */}
+        {/* Judging spinner */}
         {pending && pending.state === 'judging' && (
           <div className="bg-yellow-500/20 border border-yellow-400/40 rounded p-3">
             <p className="text-yellow-200 italic text-sm">
@@ -113,29 +131,122 @@ function HostClueModal() {
           </div>
         )}
 
-        {/* Judged — host approves/rejects */}
+        {/* Verdict — different surface for host vs player */}
         {pending && pending.state !== 'judging' && (
-          <Verdict
-            pending={pending}
-            clueValue={clue.value}
-            onCorrect={() => actions.ruleCorrect()}
-            onIncorrect={() => actions.ruleIncorrect()}
-            penaltyLeaderId={penaltyLeader}
-          />
+          isHost ? (
+            <HostVerdict
+              pending={pending}
+              clueValue={clue.value}
+              onCorrect={() => actions.ruleCorrect()}
+              onIncorrect={() => actions.ruleIncorrect()}
+              penaltyLeaderId={penaltyLeader}
+            />
+          ) : (
+            <PlayerVerdict pending={pending} mine={pending.playerId === myPlayerId} />
+          )
+        )}
+
+        {/* Bystander hint */}
+        {!isHost && !myPlayerId && (
+          <p className="text-jeopardy-cream/60 text-sm italic text-center">
+            Pick your name from the prompt to play.
+          </p>
         )}
       </div>
     </ModalShell>
   );
 }
 
-function Verdict({
+function MyAnswerInput({ actions }: { actions: ReturnType<typeof useRoom>['actions'] }) {
+  const [text, setText] = useState('');
+
+  function update(value: string) {
+    setText(value);
+    void actions.typing(value);
+  }
+
+  function send() {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    void actions.submit(trimmed);
+    setText('');
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-green-300 font-bold text-sm uppercase tracking-widest">
+        Your turn — what's your answer?
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => update(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') send();
+          }}
+          placeholder="Type your answer…"
+          className="min-w-0 flex-1 px-3 py-3 rounded bg-white/10 text-jeopardy-cream text-lg border border-jeopardy-gold/30"
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={send}
+          disabled={!text.trim()}
+          className="shrink-0 px-5 py-3 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold disabled:opacity-40"
+        >
+          Submit
+        </button>
+      </div>
+      <p className="text-jeopardy-cream/40 text-xs italic">
+        Everyone sees what you type live — be quick.
+      </p>
+    </div>
+  );
+}
+
+function BuzzedPanel({
+  name,
+  typing,
+  isHost,
+  onCancel,
+}: {
+  name: string;
+  typing: string;
+  isHost: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="bg-blue-500/20 border border-blue-400/40 rounded p-3 flex items-center justify-between gap-3">
+      <div>
+        <p className="text-blue-300 font-bold text-sm uppercase tracking-widest mb-1">
+          {name} is answering
+        </p>
+        <p className="text-jeopardy-cream text-base font-mono min-h-[1.5em]">
+          {typing || <span className="opacity-40">typing…</span>}
+        </p>
+      </div>
+      {isHost && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 bg-white/10 text-jeopardy-cream rounded hover:bg-white/20 text-sm shrink-0"
+        >
+          Cancel buzz
+        </button>
+      )}
+    </div>
+  );
+}
+
+function HostVerdict({
   pending,
   clueValue,
   onCorrect,
   onIncorrect,
   penaltyLeaderId,
 }: {
-  pending: NonNullable<NonNullable<ReturnType<typeof useRoom>['game']['activeClue']>['pendingJudgement']>;
+  pending: Pending;
   clueValue: number;
   onCorrect: () => void;
   onIncorrect: () => void;
@@ -216,150 +327,8 @@ function Verdict({
   );
 }
 
-type PlayerClueModalProps = {
-  members: ReturnType<typeof useRoom>['members'];
-  socketId: ReturnType<typeof useRoom>['socketId'];
-  actions: ReturnType<typeof useRoom>['actions'];
-};
-
-function PlayerClueModal({ members, socketId, actions }: PlayerClueModalProps) {
-  const { game, scores } = useRoom();
-  const clue = game.activeClue;
-  if (!clue) return null;
-
-  const me = socketId ? members.find((m) => m.socketId === socketId) : null;
-  const myPlayerId = me?.playerId ?? null;
-
-  const lockedOut = myPlayerId !== null && clue.lockedOutPlayerIds.includes(myPlayerId);
-  const isMyBuzz = myPlayerId !== null && clue.buzzedPlayerId === myPlayerId;
-  const someoneElseBuzzed =
-    clue.buzzedPlayerId !== null && clue.buzzedPlayerId !== myPlayerId;
-  const buzzerOpen =
-    !clue.revealed && !clue.pendingJudgement && clue.buzzedPlayerId === null;
-  const pending = clue.pendingJudgement;
-  const buzzedName =
-    clue.buzzedPlayerId !== null
-      ? scores.find((s) => s.playerId === clue.buzzedPlayerId)?.name ?? 'Someone'
-      : null;
-
-  return (
-    <ModalShell clueValue={clue.value} revealed={clue.revealed} answer={clue.answer} question={clue.question}>
-      <div className="px-6 py-4 border-t-2 border-jeopardy-gold/40 flex flex-col gap-3">
-        {!myPlayerId && (
-          <p className="text-jeopardy-cream/60 text-sm italic">
-            Pick your name from the prompt to play.
-          </p>
-        )}
-
-        {myPlayerId && buzzerOpen && !lockedOut && (
-          <button
-            type="button"
-            onClick={() => actions.buzz()}
-            className="w-full py-8 bg-red-600 hover:bg-red-500 active:scale-95 transition-all rounded-lg font-display text-jeopardy-cream text-5xl tracking-[0.4em] shadow-lg"
-          >
-            BUZZ
-          </button>
-        )}
-
-        {myPlayerId && lockedOut && (
-          <p className="text-red-300/70 italic text-center text-sm">
-            You're locked out for this clue. Wait for the next one.
-          </p>
-        )}
-
-        {someoneElseBuzzed && !pending && (
-          <BuzzedPanel name={buzzedName ?? 'Someone'} typing={clue.typingAnswer} />
-        )}
-
-        {isMyBuzz && !pending && <MyAnswerInput actions={actions} />}
-
-        {pending && (
-          <PlayerVerdict pending={pending} mine={pending.playerId === myPlayerId} />
-        )}
-      </div>
-    </ModalShell>
-  );
-}
-
-function BuzzedPanel({ name, typing }: { name: string; typing: string }) {
-  return (
-    <div className="bg-blue-500/20 border border-blue-400/40 rounded p-3">
-      <p className="text-blue-300 font-bold text-sm uppercase tracking-widest mb-1">
-        {name} is answering
-      </p>
-      <p className="text-jeopardy-cream text-base font-mono min-h-[1.5em]">
-        {typing || <span className="opacity-40">typing…</span>}
-      </p>
-    </div>
-  );
-}
-
-function MyAnswerInput({ actions }: { actions: ReturnType<typeof useRoom>['actions'] }) {
-  const [text, setText] = useState('');
-
-  function update(value: string) {
-    setText(value);
-    void actions.typing(value);
-  }
-
-  function send() {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    void actions.submit(trimmed);
-    setText('');
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="text-green-300 font-bold text-sm uppercase tracking-widest">
-        Your turn — what's your answer?
-      </p>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={text}
-          onChange={(e) => update(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') send();
-          }}
-          placeholder="Type your answer…"
-          className="min-w-0 flex-1 px-3 py-3 rounded bg-white/10 text-jeopardy-cream text-lg border border-jeopardy-gold/30"
-          autoFocus
-        />
-        <button
-          type="button"
-          onClick={send}
-          disabled={!text.trim()}
-          className="shrink-0 px-5 py-3 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold disabled:opacity-40"
-        >
-          Submit
-        </button>
-      </div>
-      <p className="text-jeopardy-cream/40 text-xs italic">
-        Everyone sees what you type live — be quick.
-      </p>
-    </div>
-  );
-}
-
-function PlayerVerdict({
-  pending,
-  mine,
-}: {
-  pending: NonNullable<NonNullable<ReturnType<typeof useRoom>['game']['activeClue']>['pendingJudgement']>;
-  mine: boolean;
-}) {
+function PlayerVerdict({ pending, mine }: { pending: Pending; mine: boolean }) {
   const isCorrect = pending.state === 'correct';
-  const isJudging = pending.state === 'judging';
-
-  if (isJudging) {
-    return (
-      <div className="bg-yellow-500/20 border border-yellow-400/40 rounded p-3 italic text-yellow-200 text-sm text-center">
-        Claude is judging…
-      </div>
-    );
-  }
-
   return (
     <div
       className={`rounded p-3 border ${

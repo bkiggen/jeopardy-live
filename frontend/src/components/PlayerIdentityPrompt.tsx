@@ -1,12 +1,13 @@
+import { useState } from 'react';
 import { useRoom } from '../context/RoomContext';
 
 export function PlayerIdentityPrompt() {
   const { isHost, scores, actions, socketId, members } = useRoom();
-
-  if (isHost) return null;
+  const [skipped, setSkipped] = useState(false);
 
   const me = socketId ? members.find((m) => m.socketId === socketId) : undefined;
   if (me?.playerId) return null;
+  if (skipped) return null;
 
   // Hide if no players exist yet (room hasn't loaded scores or there are none)
   if (scores.length === 0) {
@@ -36,7 +37,9 @@ export function PlayerIdentityPrompt() {
           WHO ARE YOU?
         </h2>
         <p className="text-jeopardy-cream/70 text-sm">
-          Tap your name. Scores attach to your player ID.
+          {isHost
+            ? 'Pick yourself if you want to play, or skip to just host.'
+            : 'Tap your name. Scores attach to your player ID.'}
         </p>
         <div className="grid grid-cols-2 gap-2">
           {scores.map((s) => {
@@ -63,6 +66,15 @@ export function PlayerIdentityPrompt() {
             );
           })}
         </div>
+        {isHost && (
+          <button
+            type="button"
+            onClick={() => setSkipped(true)}
+            className="text-jeopardy-cream/50 hover:text-jeopardy-cream text-xs uppercase tracking-widest"
+          >
+            Skip — just hosting today
+          </button>
+        )}
       </div>
     </div>
   );
