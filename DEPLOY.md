@@ -100,8 +100,10 @@ You should see `{"ok":true}` in the browser.
 The 216k Kaggle clues aren't in the image's database — we need to load them once:
 
 ```bash
-# Bundled JSON is already inside the container at src/data/200k_questions.json
-fly ssh console -C "npm run import-clues"
+# Bundled JSON is already inside the container at src/data/200k_questions.json.
+# Use the :prod variant — the dev one (`npm run import-clues`) tries to load
+# the .ts source via tsx, but the runtime image only has compiled dist/.
+fly ssh console -C "npm run import-clues:prod"
 ```
 
 This takes ~30 seconds. Verify:
