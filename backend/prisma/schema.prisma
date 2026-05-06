@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Season {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(20)
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+  isActive  Boolean   @default(false) @map("is_active")
+  scores    SeasonScore[]
+
+  @@map("seasons")
+}
+
+model Player {
+  id       Int     @id @default(autoincrement())
+  name     String  @db.VarChar(100)
+  isActive Boolean @default(true) @map("is_active")
+  scores   SeasonScore[]
+
+  @@map("players")
+}
+
+model SeasonScore {
+  id         Int    @id @default(autoincrement())
+  playerId   Int    @map("player_id")
+  seasonId   Int    @map("season_id")
+  totalScore Int    @default(0) @map("total_score")
+  player     Player @relation(fields: [playerId], references: [id])
+  season     Season @relation(fields: [seasonId], references: [id])
+
+  @@unique([playerId, seasonId])
+  @@map("season_scores")
+}
+
+model Clue {
+  id         Int       @id @default(autoincrement())
+  showNumber Int?      @map("show_number")
+  airDate    DateTime? @map("air_date") @db.Date
+  round      String?   @db.VarChar(50)
+  category   String?   @db.VarChar(255)
+  value      Int?
+  question   String?
+  answer     String?
+
+  @@index([round, category])
+  @@map("clues")
+}

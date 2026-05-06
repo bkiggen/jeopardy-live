@@ -1,0 +1,23 @@
+node_modules
+dist
+build
+.vite
+
+.env
+.env.local
+.env.*.local
+
+*.log
+npm-debug.log*
+
+.DS_Store
+.idea
+.vscode
+.claude/
+
+# Prisma
+backend/prisma/migrations/dev.db*
+
+# Local data dumps
+backend/src/data/*
+!backend/src/data/.gitkeep
