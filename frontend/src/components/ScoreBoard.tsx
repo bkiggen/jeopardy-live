@@ -17,6 +17,21 @@ export function ScoreBoard() {
   const { isHost, scores, lastAdjust, actions, members, socketId } = useRoom();
   const players = asPlayerLikes(scores);
   const myPlayerId = members.find((m) => m.socketId === socketId)?.playerId ?? null;
+  const inRoomIds = useMemo(
+    () =>
+      new Set(
+        members
+          .filter((m): m is typeof m & { playerId: number } => m.playerId !== null)
+          .map((m) => m.playerId),
+      ),
+    [members],
+  );
+  // Sort purely by score, descending. Active status is shown visually but
+  // doesn't affect ordering.
+  const orderedPlayers = useMemo(
+    () => [...players].sort((a, b) => b.score - a.score),
+    [players],
+  );
   const prev = useRef<Map<number, number>>(new Map());
   const [flash, setFlash] = useState<Map<number, Flash>>(new Map());
   const [undoing, setUndoing] = useState(false);
@@ -77,31 +92,36 @@ export function ScoreBoard() {
         </button>
       )}
 
-      {players.length === 0 ? (
+      {orderedPlayers.length === 0 ? (
         <p className="text-jeopardy-cream/60 text-sm">
           No active players. Add some in the Admin tab.
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {players.map((p) => {
+          {orderedPlayers.map((p) => {
             const f = flash.get(p.id);
+            const inRoom = inRoomIds.has(p.id);
+            const baseBg = inRoom ? 'bg-white/5' : 'bg-white/[0.02]';
             const flashClass =
-              f === 'up'
-                ? 'bg-green-500/40'
-                : f === 'down'
-                  ? 'bg-red-500/40'
-                  : 'bg-white/5';
+              f === 'up' ? 'bg-green-500/40' : f === 'down' ? 'bg-red-500/40' : baseBg;
             const isPenaltyTarget = penalty.active && p.id === penalty.leaderId;
             const isMe = p.id === myPlayerId;
             const meClass = isMe
               ? 'ring-2 ring-jeopardy-gold ring-offset-2 ring-offset-jeopardy-navy shadow-[0_0_12px_rgba(212,175,55,0.4)]'
               : '';
+            const dim = inRoom ? '' : 'opacity-50';
             return (
               <li
                 key={p.id}
-                className={`flex justify-between items-center py-2 px-3 rounded transition-colors duration-500 ${flashClass} ${meClass}`}
+                className={`flex justify-between items-center py-2 px-3 rounded transition-colors duration-500 ${flashClass} ${meClass} ${dim}`}
               >
                 <span className="text-jeopardy-cream font-medium truncate flex items-center gap-2">
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                      inRoom ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.7)]' : 'bg-transparent'
+                    }`}
+                    aria-label={inRoom ? 'in room' : 'not in room'}
+                  />
                   {isPenaltyTarget && (
                     <span
                       className="text-yellow-400 text-xs"

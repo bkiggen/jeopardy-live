@@ -59,6 +59,7 @@ type ClientToServer = {
   'host:rule_correct': (ack: Ack) => void;
   'host:rule_incorrect': (ack: Ack) => void;
   'host:cancel_buzz': (ack: Ack) => void;
+  'host:end_game': (ack: Ack) => void;
   'player:identify': (payload: { playerId: number }, ack: Ack) => void;
   'player:buzz': (ack: Ack) => void;
   'player:pass': (ack: Ack) => void;
@@ -69,6 +70,7 @@ type ClientToServer = {
 type ServerToClient = {
   'room:state': (payload: RoomStatePayload) => void;
   'room:closed': () => void;
+  'room:ended': () => void;
   'game:state': (payload: GameStatePayload) => void;
 };
 
@@ -337,6 +339,17 @@ export function attachSockets(httpServer: HTTPServer): Io {
       room.game.usedClueIds = [];
       room.game.activeClue = null;
       ack({ ok: true });
+      broadcastGameState(io, room);
+    });
+
+    socket.on('host:end_game', (ack) => {
+      const room = requireHost(socket);
+      if (!room) return ack({ ok: false, error: 'not authorized' });
+      ack({ ok: true });
+      io.to(room.code).emit('room:ended');
+      room.game.round = null;
+      room.game.usedClueIds = [];
+      room.game.activeClue = null;
       broadcastGameState(io, room);
     });
 

@@ -44,6 +44,7 @@ type RoomActions = {
   pass: () => Promise<AckResponse>;
   typing: (text: string) => Promise<AckResponse>;
   submit: (text: string) => Promise<AckResponse>;
+  endGame: () => Promise<AckResponse>;
 };
 
 type RoomContextValue = {
@@ -61,6 +62,7 @@ type RoomContextValue = {
   socketId: string | null;
   hostConnected: boolean;
   hostDisconnectedAt: number | null;
+  gameEnded: boolean;
 };
 
 const emptyGame: RoomGameState = {
@@ -89,6 +91,7 @@ export function RoomProvider({ code, isHost, children }: Props) {
   const [hostDisconnectedAt, setHostDisconnectedAt] = useState<number | null>(null);
   const [teamId, setTeamId] = useState<number | null>(null);
   const [teamName, setTeamName] = useState<string | null>(null);
+  const [gameEnded, setGameEnded] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -149,6 +152,9 @@ export function RoomProvider({ code, isHost, children }: Props) {
       setStatus('closed');
       setErrorMessage('Host left and the room was closed.');
     });
+    s.on('room:ended', () => {
+      setGameEnded(true);
+    });
 
     return () => {
       s.disconnect();
@@ -188,6 +194,7 @@ export function RoomProvider({ code, isHost, children }: Props) {
       pass: () => emit('player:pass'),
       typing: (text) => emit('player:typing', { text }),
       submit: (text) => emit('player:submit', { text }),
+      endGame: () => emit('host:end_game'),
     };
   }, []);
 
@@ -207,6 +214,7 @@ export function RoomProvider({ code, isHost, children }: Props) {
       socketId,
       hostConnected,
       hostDisconnectedAt,
+      gameEnded,
     }),
     [
       code,
@@ -223,6 +231,7 @@ export function RoomProvider({ code, isHost, children }: Props) {
       socketId,
       hostConnected,
       hostDisconnectedAt,
+      gameEnded,
     ],
   );
 

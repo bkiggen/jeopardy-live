@@ -31,6 +31,9 @@ export function AdminView({ refreshPlayers }: Props) {
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [busy, setBusy] = useState(false);
+  const [loadingTeams, setLoadingTeams] = useState(true);
+  const [loadingPlayers, setLoadingPlayers] = useState(true);
+  const [loadingSeasons, setLoadingSeasons] = useState(true);
 
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamCode, setNewTeamCode] = useState('');
@@ -43,24 +46,38 @@ export function AdminView({ refreshPlayers }: Props) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   const refreshTeams = useCallback(async () => {
-    const t = await api.getTeams();
-    setTeams(t);
-    if (selectedTeamId === null && t.length > 0) {
-      setSelectedTeamId(t[0].id);
+    try {
+      const t = await api.getTeams();
+      setTeams(t);
+      if (selectedTeamId === null && t.length > 0) {
+        setSelectedTeamId(t[0].id);
+      }
+    } finally {
+      setLoadingTeams(false);
     }
   }, [selectedTeamId]);
 
   const refreshTeamPlayers = useCallback(async () => {
     if (selectedTeamId === null) {
       setAllPlayers([]);
+      setLoadingPlayers(false);
       return;
     }
-    const list = await api.getPlayers(selectedTeamId, { all: true });
-    setAllPlayers(list);
+    setLoadingPlayers(true);
+    try {
+      const list = await api.getPlayers(selectedTeamId, { all: true });
+      setAllPlayers(list);
+    } finally {
+      setLoadingPlayers(false);
+    }
   }, [selectedTeamId]);
 
   const refreshSeasons = useCallback(async () => {
-    setSeasons(await api.getSeasons());
+    try {
+      setSeasons(await api.getSeasons());
+    } finally {
+      setLoadingSeasons(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -71,6 +88,19 @@ export function AdminView({ refreshPlayers }: Props) {
   useEffect(() => {
     void refreshTeamPlayers();
   }, [refreshTeamPlayers]);
+
+  // Refresh the open leaderboard when the selected team changes — otherwise
+  // the previously fetched team's scores stick around and look like a bug.
+  useEffect(() => {
+    if (openSeasonId === null || selectedTeamId === null) return;
+    let cancelled = false;
+    void api.getLeaderboard(openSeasonId, selectedTeamId).then((board) => {
+      if (!cancelled) setLeaderboard(board);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [openSeasonId, selectedTeamId]);
 
   async function createTeam(e: React.FormEvent) {
     e.preventDefault();
@@ -307,7 +337,13 @@ export function AdminView({ refreshPlayers }: Props) {
           </button>
         </form>
 
-        {teams.length === 0 ? (
+        {loadingTeams ? (
+          <ul className="flex flex-col gap-2" aria-label="Loading teams">
+            {[0, 1].map((i) => (
+              <li key={i} className="h-12 bg-white/5 rounded animate-pulse" />
+            ))}
+          </ul>
+        ) : teams.length === 0 ? (
           <p className="text-jeopardy-cream/60 text-sm">No teams yet.</p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -435,7 +471,13 @@ export function AdminView({ refreshPlayers }: Props) {
               </button>
             </form>
 
-            {allPlayers.length === 0 ? (
+            {loadingPlayers ? (
+              <ul className="flex flex-col gap-2" aria-label="Loading players">
+                {[0, 1, 2].map((i) => (
+                  <li key={i} className="h-10 bg-white/5 rounded animate-pulse" />
+                ))}
+              </ul>
+            ) : allPlayers.length === 0 ? (
               <p className="text-jeopardy-cream/60 text-sm">No players on this team yet.</p>
             ) : (
               <ul className="flex flex-col gap-2">
@@ -494,7 +536,13 @@ export function AdminView({ refreshPlayers }: Props) {
           </button>
         </form>
 
-        {seasons.length === 0 ? (
+        {loadingSeasons ? (
+          <ul className="flex flex-col gap-2" aria-label="Loading seasons">
+            {[0, 1].map((i) => (
+              <li key={i} className="h-11 bg-white/5 rounded animate-pulse" />
+            ))}
+          </ul>
+        ) : seasons.length === 0 ? (
           <p className="text-jeopardy-cream/60 text-sm">No seasons.</p>
         ) : (
           <ul className="flex flex-col gap-2">

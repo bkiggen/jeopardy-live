@@ -25,17 +25,6 @@ export function GameBoard() {
     if (!allDone) wasDoneRef.current = false;
   }, [allDone, isHost, playClip]);
 
-  // Host welcome line — fires once when host lands in the room with no round.
-  // Autoplay typically allows it because the host arrived via a click on the
-  // landing page; if blocked, it'll fail silently.
-  const welcomedRef = useRef(false);
-  useEffect(() => {
-    if (isHost && !round && !welcomedRef.current) {
-      welcomedRef.current = true;
-      void playClip('welcome');
-    }
-  }, [isHost, round, playClip]);
-
   async function handleStartRound(type: 'single' | 'double') {
     setLoading(true);
     try {
@@ -139,7 +128,10 @@ export function GameBoard() {
             </button>
             <button
               type="button"
-              onClick={() => playClip('goodbye')}
+              onClick={async () => {
+                await playClip('goodbye');
+                await actions.endGame();
+              }}
               className="px-8 py-4 bg-white/10 text-jeopardy-cream rounded font-display text-2xl tracking-wide hover:bg-white/20 transition-colors"
             >
               End Game
@@ -197,8 +189,8 @@ export function GameBoard() {
                     used
                       ? 'bg-jeopardy-navy-darker/60 text-transparent cursor-not-allowed'
                       : interactive
-                        ? 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile hover:bg-blue-700 hover:scale-[1.03] active:scale-95 cursor-pointer shadow-inner'
-                        : 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile cursor-default'
+                        ? 'bg-jeopardy-navy-deep text-jeopardy-gold text-[28px] text-shadow-tile hover:bg-blue-700 hover:scale-[1.03] active:scale-95 cursor-pointer shadow-inner'
+                        : 'bg-jeopardy-navy-deep text-jeopardy-gold text-[28px] text-shadow-tile cursor-default'
                   }`}
                 >
                   {used ? '·' : `$${c.value}`}

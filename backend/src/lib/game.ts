@@ -35,6 +35,7 @@ export async function pickRandomCategory(
       AND value IS NOT NULL
       AND question IS NOT NULL
       AND answer IS NOT NULL
+      AND question NOT LIKE '%<a href%'
     GROUP BY category, show_number
     HAVING COUNT(*) = 5
     ORDER BY RANDOM()
@@ -90,9 +91,19 @@ Accept liberally:
 - Single dropped or added consonants (extra "h", missing "k", swapped "c"/"k")
 - Articles, honorifics, titles dropped or added ("the Mona Lisa" or "Mona Lisa", "President Lincoln" or just "Lincoln")
 - Word order in lists
-- Partial names when unambiguous ("Einstein", "Cleopatra", "da Vinci")
+- Last name only when unambiguous ("Einstein" for Albert Einstein ✓, "da Vinci" for Leonardo da Vinci ✓)
+- Single-word / mononym answers ("Cleopatra" ✓, "Cher" ✓, "Madonna" ✓)
 - Casing, punctuation, extra trailing words ("uhh, Cleopatra I think")
 - "What is X?" / "Who is X?" prefixes (Jeopardy phrasing)
+
+Names — important rule:
+- If the correct answer is a person with a first AND last name, the player MUST give at least the last name. First name alone is INCORRECT.
+- correct: "Max Ernst" | player: "Max" → INCORRECT (first name only, ambiguous)
+- correct: "Max Ernst" | player: "Ernst" → CORRECT (last name)
+- correct: "Max Ernst" | player: "Max Ernst" → CORRECT (full name)
+- correct: "Albert Einstein" | player: "Albert" → INCORRECT
+- correct: "Albert Einstein" | player: "Einstein" → CORRECT
+- This rule does not apply to mononyms ("Cher", "Madonna", "Cleopatra") — those single-word answers are fine as given.
 
 Phonetic test: try sounding the answer out. If it sounds substantially like the correct answer, accept.
 

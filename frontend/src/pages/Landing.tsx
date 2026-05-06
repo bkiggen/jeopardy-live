@@ -7,6 +7,7 @@ export function Landing() {
   const navigate = useNavigate();
   const { callProtected } = usePasscode();
   const [teams, setTeams] = useState<Team[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
   const [joinCode, setJoinCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,6 +17,8 @@ export function Landing() {
       setTeams(await api.getTeams());
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingTeams(false);
     }
   }, []);
 
@@ -72,7 +75,25 @@ export function Landing() {
         <h2 className="font-display text-jeopardy-gold text-3xl tracking-wider">
           GAMES
         </h2>
-        {teams.length === 0 ? (
+        {loadingTeams ? (
+          <ul className="flex flex-col gap-2" aria-label="Loading games">
+            {[0, 1, 2].map((i) => (
+              <li
+                key={i}
+                className="flex items-center justify-between gap-3 bg-white/5 rounded p-3 animate-pulse"
+              >
+                <div className="flex flex-col gap-2 min-w-0 flex-1">
+                  <div className="h-5 bg-white/10 rounded w-1/3" />
+                  <div className="h-3 bg-white/10 rounded w-20" />
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <div className="h-8 w-14 bg-white/10 rounded" />
+                  <div className="h-8 w-14 bg-jeopardy-gold/20 rounded" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : teams.length === 0 ? (
           <p className="text-jeopardy-cream/70 text-sm">
             No games yet. Go to <Link to="/admin" className="underline">Admin</Link> to create one.
           </p>

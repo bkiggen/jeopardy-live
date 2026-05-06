@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { GameBoard } from '../components/GameBoard';
 import { ScoreBoard } from '../components/ScoreBoard';
@@ -26,7 +26,11 @@ export function Room() {
 
 function RoomShell() {
   const navigate = useNavigate();
-  const { code, isHost, teamName, status, errorMessage, members } = useRoom();
+  const { code, isHost, teamName, status, errorMessage, members, gameEnded } = useRoom();
+
+  useEffect(() => {
+    if (gameEnded) navigate('/');
+  }, [gameEnded, navigate]);
 
   if (status === 'closed' || status === 'error') {
     return <RoomError message={errorMessage ?? 'Connection lost.'} />;

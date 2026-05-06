@@ -1,14 +1,23 @@
 import { useState } from 'react';
 import { api } from '../api';
 import { useRoom } from '../context/RoomContext';
+import { useHostContext } from '../context/HostContext';
 
 export function PlayerIdentityPrompt() {
   const { code, isHost, status, scores, actions, socketId, members } = useRoom();
+  const { playClip } = useHostContext();
   const [skipped, setSkipped] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fire the host welcome line when the modal dismisses, so the avatar is
+  // visible while it speaks. Only the host hears audio anyway, but guard
+  // explicitly so this stays clear.
+  function dismissed() {
+    if (isHost) void playClip('welcome');
+  }
 
   const me = socketId ? members.find((m) => m.socketId === socketId) : undefined;
   if (me?.playerId) return null;
@@ -44,6 +53,7 @@ export function PlayerIdentityPrompt() {
         setError(ack.error ?? 'identify failed');
         return;
       }
+      dismissed();
       // success — modal will hide once `me.playerId` is set via room:state
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -78,7 +88,10 @@ export function PlayerIdentityPrompt() {
                   type="button"
                   key={s.playerId}
                   disabled={claimed}
-                  onClick={() => actions.identifyPlayer(s.playerId)}
+                  onClick={async () => {
+                    const ack = await actions.identifyPlayer(s.playerId);
+                    if (ack.ok) dismissed();
+                  }}
                   className={`px-3 py-3 rounded font-bold text-lg transition-colors ${
                     claimed
                       ? 'bg-white/5 text-jeopardy-cream/30 cursor-not-allowed'
@@ -136,7 +149,10 @@ export function PlayerIdentityPrompt() {
         {isHost && (
           <button
             type="button"
-            onClick={() => setSkipped(true)}
+            onClick={() => {
+              setSkipped(true);
+              dismissed();
+            }}
             className="text-jeopardy-cream/50 hover:text-jeopardy-cream text-xs uppercase tracking-widest"
           >
             Skip — just hosting today

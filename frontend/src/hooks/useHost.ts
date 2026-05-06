@@ -15,8 +15,38 @@ export type SoundClip =
   | 'goodbye';
 
 const VARIANTS: Partial<Record<SoundClip, string[]>> = {
-  correct: ['correct-1', 'correct-2', 'correct-3'],
-  incorrect: ['incorrect-1', 'incorrect-2', 'incorrect-3'],
+  welcome: ['welcome', 'welcome-2', 'welcome-3', 'welcome-4', 'welcome-5'],
+  'round-single': [
+    'round-single',
+    'round-single-2',
+    'round-single-3',
+    'round-single-4',
+    'round-single-5',
+  ],
+  'round-double': [
+    'round-double',
+    'round-double-2',
+    'round-double-3',
+    'round-double-4',
+    'round-double-5',
+  ],
+  'round-complete': [
+    'round-complete',
+    'round-complete-2',
+    'round-complete-3',
+    'round-complete-4',
+    'round-complete-5',
+  ],
+  correct: ['correct-1', 'correct-2', 'correct-3', 'correct-4', 'correct-5'],
+  incorrect: [
+    'incorrect-1',
+    'incorrect-2',
+    'incorrect-3',
+    'incorrect-4',
+    'incorrect-5',
+  ],
+  penalty: ['penalty', 'penalty-2', 'penalty-3', 'penalty-4', 'penalty-5'],
+  goodbye: ['goodbye', 'goodbye-2', 'goodbye-3', 'goodbye-4', 'goodbye-5'],
 };
 
 function pickFile(name: SoundClip): string {
