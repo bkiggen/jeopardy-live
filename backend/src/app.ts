@@ -8,6 +8,7 @@ import hostRouter from './routes/host.js';
 import judgeRouter from './routes/judge.js';
 import roomsRouter from './routes/rooms.js';
 import settingsRouter from './routes/settings.js';
+import teamsRouter from './routes/teams.js';
 import { corsOrigin } from './lib/cors.js';
 
 export function createApp() {
@@ -27,6 +28,7 @@ export function createApp() {
   app.use('/api/judge', judgeRouter);
   app.use('/api/rooms', roomsRouter);
   app.use('/api/settings', settingsRouter);
+  app.use('/api/teams', teamsRouter);
 
   return app;
 }

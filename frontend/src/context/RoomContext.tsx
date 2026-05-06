@@ -48,6 +48,8 @@ type RoomActions = {
 type RoomContextValue = {
   code: string;
   isHost: boolean;
+  teamId: number | null;
+  teamName: string | null;
   status: ConnectionStatus;
   errorMessage: string | null;
   members: RoomMemberView[];
@@ -86,6 +88,8 @@ export function RoomProvider({ code, isHost, children }: Props) {
   const [socketId, setSocketId] = useState<string | null>(null);
   const [hostConnected, setHostConnected] = useState<boolean>(true);
   const [hostDisconnectedAt, setHostDisconnectedAt] = useState<number | null>(null);
+  const [teamId, setTeamId] = useState<number | null>(null);
+  const [teamName, setTeamName] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -141,6 +145,8 @@ export function RoomProvider({ code, isHost, children }: Props) {
     s.on(
       'room:state',
       (payload: {
+        teamId: number;
+        teamName: string;
         members: RoomMemberView[];
         hostConnected: boolean;
         hostDisconnectedAt: number | null;
@@ -148,6 +154,8 @@ export function RoomProvider({ code, isHost, children }: Props) {
         setMembers(payload.members);
         setHostConnected(payload.hostConnected);
         setHostDisconnectedAt(payload.hostDisconnectedAt);
+        setTeamId(payload.teamId);
+        setTeamName(payload.teamName);
       },
     );
     s.on(
@@ -224,6 +232,8 @@ export function RoomProvider({ code, isHost, children }: Props) {
     () => ({
       code,
       isHost,
+      teamId,
+      teamName,
       status,
       errorMessage,
       members,
@@ -238,6 +248,8 @@ export function RoomProvider({ code, isHost, children }: Props) {
     [
       code,
       isHost,
+      teamId,
+      teamName,
       status,
       errorMessage,
       members,

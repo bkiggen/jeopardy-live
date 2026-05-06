@@ -17,10 +17,10 @@ export async function requireActiveSeason() {
   return season;
 }
 
-export async function ensureScore(playerId: number, seasonId: number) {
+export async function ensureScore(playerId: number, seasonId: number, teamId: number) {
   return prisma.seasonScore.upsert({
-    where: { playerId_seasonId: { playerId, seasonId } },
+    where: { playerId_seasonId_teamId: { playerId, seasonId, teamId } },
     update: {},
-    create: { playerId, seasonId, totalScore: 0 },
+    create: { playerId, seasonId, teamId, totalScore: 0 },
   });
 }

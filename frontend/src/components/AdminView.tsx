@@ -4,6 +4,7 @@ import {
   type LeaderboardEntry,
   type Player,
   type Season,
+  type Team,
 } from '../api';
 import { usePasscode } from '../context/PasscodeContext';
 import { useSettings } from '../hooks/useSettings';
@@ -25,49 +26,106 @@ function nextQuarterName(d = new Date()): string {
 export function AdminView({ refreshPlayers }: Props) {
   const { callProtected } = usePasscode();
   const { settings, setSettings, refresh: refreshSettings } = useSettings();
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const [name, setName] = useState('');
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamCode, setNewTeamCode] = useState('');
+  const [newPlayerName, setNewPlayerName] = useState('');
   const [seasonName, setSeasonName] = useState(nextQuarterName());
 
   const [openSeasonId, setOpenSeasonId] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
-  const refreshAll = useCallback(async () => {
-    const [players, ss] = await Promise.all([
-      api.getPlayers({ all: true }),
-      api.getSeasons(),
-    ]);
-    setAllPlayers(players);
-    setSeasons(ss);
+  const refreshTeams = useCallback(async () => {
+    const t = await api.getTeams();
+    setTeams(t);
+    if (selectedTeamId === null && t.length > 0) {
+      setSelectedTeamId(t[0].id);
+    }
+  }, [selectedTeamId]);
+
+  const refreshTeamPlayers = useCallback(async () => {
+    if (selectedTeamId === null) {
+      setAllPlayers([]);
+      return;
+    }
+    const list = await api.getPlayers(selectedTeamId, { all: true });
+    setAllPlayers(list);
+  }, [selectedTeamId]);
+
+  const refreshSeasons = useCallback(async () => {
+    setSeasons(await api.getSeasons());
   }, []);
 
   useEffect(() => {
-    void refreshAll();
-  }, [refreshAll]);
+    void refreshTeams();
+    void refreshSeasons();
+  }, [refreshTeams, refreshSeasons]);
 
-  async function add(e: React.FormEvent) {
+  useEffect(() => {
+    void refreshTeamPlayers();
+  }, [refreshTeamPlayers]);
+
+  async function createTeam(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!newTeamName.trim()) return;
     setBusy(true);
     try {
-      const result = await callProtected(() => api.addPlayer(name.trim()));
+      const result = await callProtected(() =>
+        api.addTeam({
+          name: newTeamName.trim(),
+          code: newTeamCode.trim() || undefined,
+        }),
+      );
       if (result == null) return;
-      setName('');
-      await Promise.all([refreshAll(), refreshPlayers()]);
+      setNewTeamName('');
+      setNewTeamCode('');
+      await refreshTeams();
+      setSelectedTeamId(result.id);
     } finally {
       setBusy(false);
     }
   }
 
-  async function toggle(p: Player) {
+  async function toggleTeam(team: Team) {
+    setBusy(true);
+    try {
+      const result = await callProtected(() =>
+        api.updateTeam(team.id, { isActive: !team.isActive }),
+      );
+      if (result == null) return;
+      await refreshTeams();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addPlayer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newPlayerName.trim() || selectedTeamId === null) return;
+    setBusy(true);
+    try {
+      const result = await callProtected(() =>
+        api.addPlayer(newPlayerName.trim(), selectedTeamId),
+      );
+      if (result == null) return;
+      setNewPlayerName('');
+      await Promise.all([refreshTeamPlayers(), refreshPlayers()]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function togglePlayer(p: Player) {
     setBusy(true);
     try {
       const result = await callProtected(() => api.togglePlayer(p.id, !p.isActive));
       if (result == null) return;
-      await Promise.all([refreshAll(), refreshPlayers()]);
+      await Promise.all([refreshTeamPlayers(), refreshPlayers()]);
     } finally {
       setBusy(false);
     }
@@ -82,7 +140,7 @@ export function AdminView({ refreshPlayers }: Props) {
       const result = await callProtected(() => api.startSeason(seasonName.trim()));
       if (result == null) return;
       setSeasonName(nextQuarterName());
-      await Promise.all([refreshAll(), refreshPlayers()]);
+      await Promise.all([refreshSeasons(), refreshPlayers()]);
     } finally {
       setBusy(false);
     }
@@ -103,16 +161,6 @@ export function AdminView({ refreshPlayers }: Props) {
     }
   }
 
-  async function viewSeason(id: number) {
-    if (openSeasonId === id) {
-      setOpenSeasonId(null);
-      return;
-    }
-    const board = await api.getLeaderboard(id);
-    setOpenSeasonId(id);
-    setLeaderboard(board);
-  }
-
   async function selectVoice(voiceId: string) {
     setBusy(true);
     try {
@@ -123,6 +171,17 @@ export function AdminView({ refreshPlayers }: Props) {
       setBusy(false);
       void refreshSettings();
     }
+  }
+
+  async function viewSeason(id: number) {
+    if (openSeasonId === id) {
+      setOpenSeasonId(null);
+      return;
+    }
+    if (selectedTeamId === null) return;
+    const board = await api.getLeaderboard(id, selectedTeamId);
+    setOpenSeasonId(id);
+    setLeaderboard(board);
   }
 
   return (
@@ -153,10 +212,6 @@ export function AdminView({ refreshPlayers }: Props) {
                 );
               })}
             </div>
-            <p className="text-jeopardy-cream/60 text-xs">
-              Switches the canned soundboard between voice variants and tells
-              live (money-burning) synthesis which voice to use.
-            </p>
           </div>
 
           <div className="bg-white/5 rounded p-4 flex items-center justify-between gap-4">
@@ -166,8 +221,7 @@ export function AdminView({ refreshPlayers }: Props) {
               </span>
               <span className="text-jeopardy-cream/60 text-xs">
                 When ON, the host's voice reads each clue aloud via ElevenLabs
-                live (≈$0.005/clue + character usage). When OFF, only the
-                committed sound clips play. Default: OFF.
+                live. When OFF, only the committed sound clips play.
               </span>
             </div>
             <button
@@ -186,60 +240,150 @@ export function AdminView({ refreshPlayers }: Props) {
         </div>
       </section>
 
-      {/* Players */}
+      {/* Teams */}
       <section>
-        <h2 className="text-jeopardy-gold text-xl font-bold mb-3">PLAYERS</h2>
-        <form onSubmit={add} className="flex gap-2 mb-4">
+        <h2 className="text-jeopardy-gold text-xl font-bold mb-3">TEAMS</h2>
+        <form onSubmit={createTeam} className="flex flex-wrap gap-2 mb-4">
           <input
             type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Player name"
-            className="flex-1 px-3 py-2 rounded bg-white/10 text-jeopardy-cream placeholder-jeopardy-cream/40 border border-jeopardy-gold/30"
+            value={newTeamName}
+            onChange={(e) => setNewTeamName(e.target.value)}
+            placeholder="Team name (e.g. Engineering)"
+            className="flex-1 min-w-0 px-3 py-2 rounded bg-white/10 text-jeopardy-cream placeholder-jeopardy-cream/40 border border-jeopardy-gold/30"
+          />
+          <input
+            type="text"
+            value={newTeamCode}
+            onChange={(e) => setNewTeamCode(e.target.value.toUpperCase())}
+            placeholder="Code (auto)"
+            maxLength={8}
+            className="w-32 px-3 py-2 rounded bg-white/10 text-jeopardy-cream font-display tracking-widest placeholder-jeopardy-cream/30 border border-jeopardy-gold/30 uppercase"
           />
           <button
             type="submit"
-            disabled={busy || !name.trim()}
+            disabled={busy || !newTeamName.trim()}
             className="px-4 py-2 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold disabled:opacity-50"
           >
-            Add
+            Create Team
           </button>
         </form>
 
-        {allPlayers.length === 0 ? (
-          <p className="text-jeopardy-cream/60 text-sm">No players yet.</p>
+        {teams.length === 0 ? (
+          <p className="text-jeopardy-cream/60 text-sm">No teams yet.</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {allPlayers.map((p) => (
-              <li
-                key={p.id}
-                className={`flex items-center justify-between rounded px-3 py-2 ${
-                  p.isActive ? 'bg-white/5' : 'bg-white/[0.02] opacity-60'
-                }`}
-              >
-                <span className="text-jeopardy-cream font-medium">
-                  {p.name}
-                  {!p.isActive && (
-                    <span className="ml-2 text-xs uppercase tracking-wide text-jeopardy-cream/40">
-                      inactive
-                    </span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => toggle(p)}
-                  disabled={busy}
-                  className={`px-3 py-1 rounded text-sm disabled:opacity-50 ${
-                    p.isActive
-                      ? 'bg-red-600/40 hover:bg-red-600/70 text-white'
-                      : 'bg-green-600/40 hover:bg-green-600/70 text-white'
-                  }`}
+            {teams.map((t) => {
+              const selected = t.id === selectedTeamId;
+              return (
+                <li
+                  key={t.id}
+                  className={`flex items-center justify-between rounded px-3 py-2 ${
+                    selected ? 'bg-jeopardy-gold/10 border border-jeopardy-gold/40' : 'bg-white/5'
+                  } ${t.isActive ? '' : 'opacity-60'}`}
                 >
-                  {p.isActive ? 'Deactivate' : 'Reactivate'}
-                </button>
-              </li>
-            ))}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTeamId(t.id)}
+                    className="flex-1 text-left flex items-center gap-3 min-w-0"
+                  >
+                    <span className="text-jeopardy-cream font-medium truncate">
+                      {t.name}
+                    </span>
+                    <span className="text-jeopardy-gold/70 text-xs font-mono uppercase tracking-widest">
+                      {t.code}
+                    </span>
+                    {!t.isActive && (
+                      <span className="text-jeopardy-cream/40 text-xs uppercase tracking-wide">
+                        inactive
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleTeam(t)}
+                    disabled={busy}
+                    className={`shrink-0 ml-2 px-3 py-1 rounded text-sm disabled:opacity-50 ${
+                      t.isActive
+                        ? 'bg-red-600/40 hover:bg-red-600/70 text-white'
+                        : 'bg-green-600/40 hover:bg-green-600/70 text-white'
+                    }`}
+                  >
+                    {t.isActive ? 'Deactivate' : 'Reactivate'}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
+        )}
+      </section>
+
+      {/* Players */}
+      <section>
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-jeopardy-gold text-xl font-bold">PLAYERS</h2>
+          {selectedTeamId !== null && (
+            <span className="text-jeopardy-cream/50 text-xs uppercase tracking-widest">
+              for {teams.find((t) => t.id === selectedTeamId)?.name}
+            </span>
+          )}
+        </div>
+        {selectedTeamId === null ? (
+          <p className="text-jeopardy-cream/60 text-sm">Select a team to manage its players.</p>
+        ) : (
+          <>
+            <form onSubmit={addPlayer} className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newPlayerName}
+                onChange={(e) => setNewPlayerName(e.target.value)}
+                placeholder="Player name"
+                className="flex-1 px-3 py-2 rounded bg-white/10 text-jeopardy-cream placeholder-jeopardy-cream/40 border border-jeopardy-gold/30"
+              />
+              <button
+                type="submit"
+                disabled={busy || !newPlayerName.trim()}
+                className="px-4 py-2 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold disabled:opacity-50"
+              >
+                Add
+              </button>
+            </form>
+
+            {allPlayers.length === 0 ? (
+              <p className="text-jeopardy-cream/60 text-sm">No players on this team yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {allPlayers.map((p) => (
+                  <li
+                    key={p.id}
+                    className={`flex items-center justify-between rounded px-3 py-2 ${
+                      p.isActive ? 'bg-white/5' : 'bg-white/[0.02] opacity-60'
+                    }`}
+                  >
+                    <span className="text-jeopardy-cream font-medium">
+                      {p.name}
+                      {!p.isActive && (
+                        <span className="ml-2 text-xs uppercase tracking-wide text-jeopardy-cream/40">
+                          inactive
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => togglePlayer(p)}
+                      disabled={busy}
+                      className={`px-3 py-1 rounded text-sm disabled:opacity-50 ${
+                        p.isActive
+                          ? 'bg-red-600/40 hover:bg-red-600/70 text-white'
+                          : 'bg-green-600/40 hover:bg-green-600/70 text-white'
+                      }`}
+                    >
+                      {p.isActive ? 'Deactivate' : 'Reactivate'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </section>
 
@@ -288,6 +432,9 @@ export function AdminView({ refreshPlayers }: Props) {
                 </button>
                 {openSeasonId === s.id && (
                   <div className="px-3 pb-3 border-t border-jeopardy-gold/10">
+                    <p className="text-jeopardy-cream/40 text-xs uppercase tracking-widest pt-2">
+                      {teams.find((t) => t.id === selectedTeamId)?.name ?? '—'} leaderboard
+                    </p>
                     {leaderboard.length === 0 ? (
                       <p className="text-jeopardy-cream/40 text-sm py-2">
                         No scores recorded.

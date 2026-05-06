@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app.js';
 import { prisma } from '../src/prisma.js';
-import { TEST_PREFIX, passHeader } from './setup.js';
+import { TEST_PREFIX, getTestTeamId, passHeader } from './setup.js';
 
 describe('GET /api/seasons', () => {
   it('returns seasons newest first', async () => {
@@ -18,7 +18,9 @@ describe('GET /api/seasons', () => {
 describe('GET /api/seasons/:id/scores', () => {
   it('returns leaderboard sorted by score desc', async () => {
     const active = await prisma.season.findFirstOrThrow({ where: { isActive: true } });
-    const res = await request(app).get(`/api/seasons/${active.id}/scores`);
+    const res = await request(app).get(
+      `/api/seasons/${active.id}/scores?teamId=${getTestTeamId()}`,
+    );
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
     if (res.body.length > 1) {
@@ -29,7 +31,15 @@ describe('GET /api/seasons/:id/scores', () => {
   });
 
   it('400s on a non-numeric id', async () => {
-    const res = await request(app).get('/api/seasons/not-a-number/scores');
+    const res = await request(app).get(
+      `/api/seasons/not-a-number/scores?teamId=${getTestTeamId()}`,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('400s without teamId', async () => {
+    const active = await prisma.season.findFirstOrThrow({ where: { isActive: true } });
+    const res = await request(app).get(`/api/seasons/${active.id}/scores`);
     expect(res.status).toBe(400);
   });
 });

@@ -1,9 +1,17 @@
 const BASE = import.meta.env.VITE_API_URL ?? '';
 
+export type Team = {
+  id: number;
+  name: string;
+  code: string;
+  isActive: boolean;
+};
+
 export type Player = {
   id: number;
   name: string;
   isActive: boolean;
+  teamId: number;
   score: number;
 };
 
@@ -149,26 +157,49 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  getPlayers: (opts?: { all?: boolean }) =>
-    request<Player[]>(`/api/players${opts?.all ? '?all=true' : ''}`),
-  addPlayer: (name: string) =>
-    request<Player>('/api/players', { method: 'POST', body: JSON.stringify({ name }) }),
+  getTeams: () => request<Team[]>('/api/teams'),
+  getTeam: (code: string) => request<Team>(`/api/teams/${encodeURIComponent(code)}`),
+  addTeam: (input: { name: string; code?: string }) =>
+    request<Team>('/api/teams', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  updateTeam: (id: number, patch: { name?: string; isActive?: boolean }) =>
+    request<Team>(`/api/teams/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  selfJoinPlayer: (teamCode: string, name: string) =>
+    request<Player>(`/api/teams/${encodeURIComponent(teamCode)}/players`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  getPlayers: (teamId: number, opts?: { all?: boolean }) => {
+    const qs = new URLSearchParams({ teamId: String(teamId) });
+    if (opts?.all) qs.set('all', 'true');
+    return request<Player[]>(`/api/players?${qs.toString()}`);
+  },
+  addPlayer: (name: string, teamId: number) =>
+    request<Player>('/api/players', {
+      method: 'POST',
+      body: JSON.stringify({ name, teamId }),
+    }),
   togglePlayer: (id: number, isActive: boolean) =>
     request<Player>(`/api/players/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ isActive }),
     }),
-  adjustScore: (playerId: number, delta: number) =>
-    request<{ playerId: number; seasonId: number; totalScore: number }>(
+  adjustScore: (playerId: number, teamId: number, delta: number) =>
+    request<{ playerId: number; seasonId: number; teamId: number; totalScore: number }>(
       '/api/scores/adjust',
-      { method: 'POST', body: JSON.stringify({ playerId, delta }) },
+      { method: 'POST', body: JSON.stringify({ playerId, teamId, delta }) },
     ),
   getRandomCategory: (round: 'single' | 'double') =>
     request<RoundData>(`/api/clues/random-category?round=${round}`),
   getFinal: () => request<FinalClue>('/api/clues/final'),
   getSeasons: () => request<Season[]>('/api/seasons'),
-  getLeaderboard: (id: number) =>
-    request<LeaderboardEntry[]>(`/api/seasons/${id}/scores`),
+  getLeaderboard: (id: number, teamId: number) =>
+    request<LeaderboardEntry[]>(`/api/seasons/${id}/scores?teamId=${teamId}`),
   startSeason: (name?: string) =>
     request<Season>('/api/seasons', {
       method: 'POST',
@@ -179,12 +210,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
-  createRoom: () =>
-    request<{ code: string; createdAt: number }>('/api/rooms', { method: 'POST' }),
   getRoom: (code: string) =>
-    request<{ code: string; memberCount: number; hostConnected: boolean }>(
-      `/api/rooms/${encodeURIComponent(code)}`,
-    ),
+    request<{
+      code: string;
+      teamId: number;
+      teamName: string;
+      memberCount: number;
+      hostConnected: boolean;
+    }>(`/api/rooms/${encodeURIComponent(code)}`),
   getSettings: () => request<AppSettings>('/api/settings'),
   setSettings: (patch: Partial<AppSettings>) =>
     request<AppSettings>('/api/settings', {

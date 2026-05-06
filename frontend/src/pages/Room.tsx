@@ -13,7 +13,7 @@ export function Room() {
   const [search] = useSearchParams();
   const isHost = search.get('host') === '1';
 
-  if (!code || code.length !== 4) {
+  if (!code || code.length < 2 || code.length > 8) {
     return <RoomError message="Invalid room code." />;
   }
 
@@ -26,7 +26,7 @@ export function Room() {
 
 function RoomShell() {
   const navigate = useNavigate();
-  const { code, isHost, status, errorMessage, members } = useRoom();
+  const { code, isHost, teamName, status, errorMessage, members } = useRoom();
 
   if (status === 'closed' || status === 'error') {
     return <RoomError message={errorMessage ?? 'Connection lost.'} />;
@@ -34,7 +34,13 @@ function RoomShell() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <RoomHeader code={code} isHost={isHost} status={status} memberCount={members.length} />
+      <RoomHeader
+        code={code}
+        teamName={teamName}
+        isHost={isHost}
+        status={status}
+        memberCount={members.length}
+      />
       <HostAwayBanner />
       <main className="flex-1 grid grid-cols-[1fr_320px] gap-4 p-4">
         <section className="flex flex-col gap-4">
@@ -64,11 +70,13 @@ function RoomShell() {
 
 function RoomHeader({
   code,
+  teamName,
   isHost,
   status,
   memberCount,
 }: {
   code: string;
+  teamName: string | null;
   isHost: boolean;
   status: string;
   memberCount: number;
@@ -91,10 +99,15 @@ function RoomHeader({
       <div className="flex items-center gap-3">
         <Link
           to="/"
-          className="font-display text-jeopardy-gold text-3xl tracking-widest text-shadow-tile hover:opacity-80"
+          className="font-display text-jeopardy-gold text-2xl tracking-widest text-shadow-tile hover:opacity-80"
         >
           STANDUP JEOPARDY
         </Link>
+        {teamName && (
+          <span className="text-jeopardy-cream font-bold text-base truncate max-w-[16rem]">
+            · {teamName}
+          </span>
+        )}
         <span className="px-2 py-0.5 rounded border border-jeopardy-gold/50 text-jeopardy-gold/80 text-xs uppercase tracking-widest">
           {isHost ? 'host' : 'player'}
         </span>

@@ -13,7 +13,7 @@ router.get('/', async (_req, res) => {
   res.json(seasons);
 });
 
-// GET /api/seasons/:id/scores — leaderboard for a season
+// GET /api/seasons/:id/scores?teamId=N (or ?teamCode=ABCD) — leaderboard for a season
 router.get('/:id/scores', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
@@ -21,8 +21,14 @@ router.get('/:id/scores', async (req, res) => {
     return;
   }
 
+  const teamId = await resolveTeamId(req.query);
+  if (teamId == null) {
+    res.status(400).json({ error: 'teamId or teamCode is required' });
+    return;
+  }
+
   const scores = await prisma.seasonScore.findMany({
-    where: { seasonId: id },
+    where: { seasonId: id, teamId },
     include: { player: true },
     orderBy: { totalScore: 'desc' },
   });
@@ -54,5 +60,20 @@ router.post('/', requirePasscode, async (req, res) => {
 
   res.status(201).json(season);
 });
+
+async function resolveTeamId(query: Record<string, unknown>): Promise<number | null> {
+  if (typeof query.teamId === 'string') {
+    const id = Number.parseInt(query.teamId, 10);
+    if (Number.isFinite(id)) return id;
+  }
+  if (typeof query.teamCode === 'string') {
+    const team = await prisma.team.findUnique({
+      where: { code: query.teamCode.toUpperCase() },
+      select: { id: true },
+    });
+    return team?.id ?? null;
+  }
+  return null;
+}
 
 export default router;

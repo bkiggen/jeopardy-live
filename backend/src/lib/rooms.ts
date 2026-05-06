@@ -60,6 +60,8 @@ export type RoomMember = {
 
 export type Room = {
   code: string;
+  teamId: number;
+  teamName: string;
   hostSocketId: string | null;
   members: Map<string, RoomMember>;
   createdAt: number;
@@ -70,33 +72,24 @@ export type Room = {
   hostGraceTimer: ReturnType<typeof setTimeout> | null;
 };
 
-const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1
-const ROOM_CODE_LENGTH = 4;
-
-function generateCode(): string {
-  let out = '';
-  for (let i = 0; i < ROOM_CODE_LENGTH; i += 1) {
-    out += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
-  }
-  return out;
-}
-
 function emptyGame(): RoomGameState {
   return { round: null, usedClueIds: [], activeClue: null };
 }
 
+// In-memory live-session state keyed by team code. Persistent team data
+// (name, players, scores) lives in the DB; this just holds the ephemeral
+// stuff for an active session (current round, active clue, buzzes).
 export class RoomManager {
   private rooms = new Map<string, Room>();
 
-  create(): Room {
-    let code = generateCode();
-    let attempts = 0;
-    while (this.rooms.has(code) && attempts < 50) {
-      code = generateCode();
-      attempts += 1;
-    }
+  getOrCreate(team: { id: number; name: string; code: string }): Room {
+    const code = team.code.toUpperCase();
+    const existing = this.rooms.get(code);
+    if (existing) return existing;
     const room: Room = {
       code,
+      teamId: team.id,
+      teamName: team.name,
       hostSocketId: null,
       members: new Map(),
       createdAt: Date.now(),

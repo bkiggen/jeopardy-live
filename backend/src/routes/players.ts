@@ -5,8 +5,9 @@ import { requirePasscode } from '../lib/passcode.js';
 
 const router = Router();
 
-// GET /api/players — active players + their score for the active season.
-// Pass ?all=true to include deactivated players (used by the admin view).
+// GET /api/players?teamId=N (or ?teamCode=ABCD) — active players + their score
+// for the active season scoped to the given team. Pass ?all=true to include
+// deactivated players (used by the admin view).
 router.get('/', async (req, res) => {
   const season = await requireActiveSeason().catch(() => null);
   if (!season) {
@@ -14,12 +15,21 @@ router.get('/', async (req, res) => {
     return;
   }
 
+  const teamId = await resolveTeamId(req.query);
+  if (teamId == null) {
+    res.status(400).json({ error: 'teamId or teamCode is required' });
+    return;
+  }
+
   const includeInactive = req.query.all === 'true';
   const players = await prisma.player.findMany({
-    where: includeInactive ? {} : { isActive: true },
+    where: {
+      teamId,
+      ...(includeInactive ? {} : { isActive: true }),
+    },
     orderBy: { id: 'asc' },
     include: {
-      scores: { where: { seasonId: season.id } },
+      scores: { where: { seasonId: season.id, teamId } },
     },
   });
 
@@ -28,16 +38,27 @@ router.get('/', async (req, res) => {
       id: p.id,
       name: p.name,
       isActive: p.isActive,
+      teamId: p.teamId,
       score: p.scores[0]?.totalScore ?? 0,
     })),
   );
 });
 
-// POST /api/players — add a player and bootstrap their season score row
+// POST /api/players — add a player to a specific team and bootstrap their score row.
 router.post('/', requirePasscode, async (req, res) => {
-  const { name } = req.body as { name?: string };
+  const { name, teamId } = req.body as { name?: string; teamId?: number };
   if (!name?.trim()) {
     res.status(400).json({ error: 'name is required' });
+    return;
+  }
+  if (typeof teamId !== 'number') {
+    res.status(400).json({ error: 'teamId is required' });
+    return;
+  }
+
+  const team = await prisma.team.findUnique({ where: { id: teamId } });
+  if (!team) {
+    res.status(404).json({ error: 'team not found' });
     return;
   }
 
@@ -48,11 +69,17 @@ router.post('/', requirePasscode, async (req, res) => {
   }
 
   const player = await prisma.player.create({
-    data: { name: name.trim(), isActive: true },
+    data: { name: name.trim(), isActive: true, teamId },
   });
-  await ensureScore(player.id, season.id);
+  await ensureScore(player.id, season.id, teamId);
 
-  res.status(201).json({ id: player.id, name: player.name, isActive: true, score: 0 });
+  res.status(201).json({
+    id: player.id,
+    name: player.name,
+    isActive: true,
+    teamId,
+    score: 0,
+  });
 });
 
 // PATCH /api/players/:id — toggle isActive
@@ -75,5 +102,20 @@ router.patch('/:id', requirePasscode, async (req, res) => {
   });
   res.json(player);
 });
+
+async function resolveTeamId(query: Record<string, unknown>): Promise<number | null> {
+  if (typeof query.teamId === 'string') {
+    const id = Number.parseInt(query.teamId, 10);
+    if (Number.isFinite(id)) return id;
+  }
+  if (typeof query.teamCode === 'string') {
+    const team = await prisma.team.findUnique({
+      where: { code: query.teamCode.toUpperCase() },
+      select: { id: true },
+    });
+    return team?.id ?? null;
+  }
+  return null;
+}
 
 export default router;

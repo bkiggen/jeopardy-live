@@ -4,13 +4,15 @@ import { requireActiveSeason } from './season.js';
 import { redactAnswer } from './judge.js';
 import type { GameRound, RoomScore } from './rooms.js';
 
-export async function loadActiveScores(): Promise<RoomScore[]> {
+export async function loadActiveScores(teamId: number): Promise<RoomScore[]> {
   const season = await requireActiveSeason().catch(() => null);
   if (!season) return [];
   const players = await prisma.player.findMany({
-    where: { isActive: true },
+    where: { isActive: true, teamId },
     orderBy: { id: 'asc' },
-    include: { scores: { where: { seasonId: season.id } } },
+    include: {
+      scores: { where: { seasonId: season.id, teamId } },
+    },
   });
   return players.map((p) => ({
     playerId: p.id,
@@ -59,13 +61,20 @@ export async function pickRandomCategory(
 
 export async function adjustPlayerScore(
   playerId: number,
+  teamId: number,
   delta: number,
 ): Promise<void> {
   const season = await requireActiveSeason();
   await prisma.seasonScore.upsert({
-    where: { playerId_seasonId: { playerId, seasonId: season.id } },
+    where: {
+      playerId_seasonId_teamId: {
+        playerId,
+        seasonId: season.id,
+        teamId,
+      },
+    },
     update: { totalScore: { increment: delta } },
-    create: { playerId, seasonId: season.id, totalScore: delta },
+    create: { playerId, seasonId: season.id, teamId, totalScore: delta },
   });
 }
 

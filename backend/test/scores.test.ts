@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app.js';
-import { TEST_PREFIX, passHeader } from './setup.js';
+import { TEST_PREFIX, getTestTeamId, passHeader } from './setup.js';
 
 const name = (suffix: string) =>
   `${TEST_PREFIX}${suffix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -10,7 +10,7 @@ async function newPlayer(suffix: string) {
   const res = await request(app)
     .post('/api/players')
     .set(passHeader)
-    .send({ name: name(suffix) });
+    .send({ name: name(suffix), teamId: getTestTeamId() });
   return res.body.id as number;
 }
 
@@ -20,7 +20,7 @@ describe('POST /api/scores/adjust', () => {
     const res = await request(app)
       .post('/api/scores/adjust')
       .set(passHeader)
-      .send({ playerId: id, delta: 800 });
+      .send({ playerId: id, teamId: getTestTeamId(), delta: 800 });
     expect(res.status).toBe(200);
     expect(res.body.totalScore).toBe(800);
   });
@@ -30,25 +30,26 @@ describe('POST /api/scores/adjust', () => {
     const res = await request(app)
       .post('/api/scores/adjust')
       .set(passHeader)
-      .send({ playerId: id, delta: -400 });
+      .send({ playerId: id, teamId: getTestTeamId(), delta: -400 });
     expect(res.status).toBe(200);
     expect(res.body.totalScore).toBe(-400);
   });
 
   it('accumulates across calls', async () => {
     const id = await newPlayer('accum');
+    const teamId = getTestTeamId();
     await request(app)
       .post('/api/scores/adjust')
       .set(passHeader)
-      .send({ playerId: id, delta: 200 });
+      .send({ playerId: id, teamId, delta: 200 });
     await request(app)
       .post('/api/scores/adjust')
       .set(passHeader)
-      .send({ playerId: id, delta: 200 });
+      .send({ playerId: id, teamId, delta: 200 });
     const last = await request(app)
       .post('/api/scores/adjust')
       .set(passHeader)
-      .send({ playerId: id, delta: -100 });
+      .send({ playerId: id, teamId, delta: -100 });
     expect(last.body.totalScore).toBe(300);
   });
 
@@ -66,7 +67,7 @@ describe('POST /api/scores/adjust', () => {
     const res = await request(app)
       .post('/api/scores/adjust')
       .set(passHeader)
-      .send({ playerId: id, delta: 'oops' });
+      .send({ playerId: id, teamId: getTestTeamId(), delta: 'oops' });
     expect(res.status).toBe(400);
   });
 
@@ -74,7 +75,7 @@ describe('POST /api/scores/adjust', () => {
     const id = await newPlayer('noauth');
     const res = await request(app)
       .post('/api/scores/adjust')
-      .send({ playerId: id, delta: 100 });
+      .send({ playerId: id, teamId: getTestTeamId(), delta: 100 });
     expect(res.status).toBe(401);
   });
 });

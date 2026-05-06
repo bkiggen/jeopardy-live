@@ -18,10 +18,25 @@ model Season {
   @@map("seasons")
 }
 
+model Team {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(50)
+  code      String   @unique @db.VarChar(8)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  players Player[]
+  scores  SeasonScore[]
+
+  @@map("teams")
+}
+
 model Player {
   id       Int     @id @default(autoincrement())
   name     String  @db.VarChar(100)
   isActive Boolean @default(true) @map("is_active")
+  teamId   Int     @map("team_id")
+  team     Team    @relation(fields: [teamId], references: [id])
   scores   SeasonScore[]
 
   @@map("players")
@@ -31,11 +46,13 @@ model SeasonScore {
   id         Int    @id @default(autoincrement())
   playerId   Int    @map("player_id")
   seasonId   Int    @map("season_id")
+  teamId     Int    @map("team_id")
   totalScore Int    @default(0) @map("total_score")
   player     Player @relation(fields: [playerId], references: [id])
   season     Season @relation(fields: [seasonId], references: [id])
+  team       Team   @relation(fields: [teamId], references: [id])
 
-  @@unique([playerId, seasonId])
+  @@unique([playerId, seasonId, teamId])
   @@map("season_scores")
 }
 

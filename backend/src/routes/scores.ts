@@ -1,15 +1,26 @@
 import { Router } from 'express';
-import { prisma } from '../prisma.js';
 import { requireActiveSeason } from '../lib/season.js';
 import { requirePasscode } from '../lib/passcode.js';
+import { adjustPlayerScore } from '../lib/game.js';
+import { prisma } from '../prisma.js';
 
 const router = Router();
 
-// POST /api/scores/adjust — { playerId, delta } -> updated score
+// POST /api/scores/adjust — { playerId, teamId, delta } -> updated score
 router.post('/adjust', requirePasscode, async (req, res) => {
-  const { playerId, delta } = req.body as { playerId?: number; delta?: number };
-  if (typeof playerId !== 'number' || typeof delta !== 'number') {
-    res.status(400).json({ error: 'playerId and delta (numbers) are required' });
+  const { playerId, teamId, delta } = req.body as {
+    playerId?: number;
+    teamId?: number;
+    delta?: number;
+  };
+  if (
+    typeof playerId !== 'number' ||
+    typeof teamId !== 'number' ||
+    typeof delta !== 'number'
+  ) {
+    res.status(400).json({
+      error: 'playerId, teamId, and delta (numbers) are required',
+    });
     return;
   }
 
@@ -19,13 +30,20 @@ router.post('/adjust', requirePasscode, async (req, res) => {
     return;
   }
 
-  const updated = await prisma.seasonScore.upsert({
-    where: { playerId_seasonId: { playerId, seasonId: season.id } },
-    update: { totalScore: { increment: delta } },
-    create: { playerId, seasonId: season.id, totalScore: delta },
+  await adjustPlayerScore(playerId, teamId, delta);
+  const score = await prisma.seasonScore.findUnique({
+    where: {
+      playerId_seasonId_teamId: { playerId, seasonId: season.id, teamId },
+    },
+    select: { totalScore: true },
   });
 
-  res.json({ playerId, seasonId: season.id, totalScore: updated.totalScore });
+  res.json({
+    playerId,
+    seasonId: season.id,
+    teamId,
+    totalScore: score?.totalScore ?? 0,
+  });
 });
 
 export default router;

@@ -16,12 +16,15 @@ import {
   judgeAnswerServerSide,
 } from './lib/game.js';
 import { corsOrigin } from './lib/cors.js';
+import { findTeamByCode } from './lib/teams.js';
 
 type JoinPayload = { code: string; isHost: boolean; passcode?: string };
 type Ack = (resp: { ok: boolean; error?: string }) => void;
 
 type RoomStatePayload = {
   code: string;
+  teamId: number;
+  teamName: string;
   members: Array<{
     socketId: string;
     name: string | null;
@@ -90,8 +93,13 @@ export function attachSockets(httpServer: HTTPServer): Io {
     socket.data.isHost = false;
 
     socket.on('room:join', async (payload, ack) => {
-      const room = rooms.get(payload.code);
-      if (!room) return ack({ ok: false, error: 'room not found' });
+      // Look up the persistent team by code; create the in-memory live room
+      // on demand if no one's connected yet.
+      const team = await findTeamByCode(payload.code);
+      if (!team || !team.isActive) {
+        return ack({ ok: false, error: 'team not found' });
+      }
+      const room = rooms.getOrCreate(team);
 
       if (payload.isHost) {
         if (!passcodeConfigured())
@@ -102,7 +110,6 @@ export function attachSockets(httpServer: HTTPServer): Io {
           return ack({ ok: false, error: 'room already has a host' });
         room.hostSocketId = socket.id;
         socket.data.isHost = true;
-        // Cancel any pending grace-period deletion if host reconnected
         if (room.hostGraceTimer) {
           clearTimeout(room.hostGraceTimer);
           room.hostGraceTimer = null;
@@ -119,12 +126,12 @@ export function attachSockets(httpServer: HTTPServer): Io {
       socket.data.joinedRoomCode = room.code;
       socket.join(room.code);
 
-      if (room.scores.length === 0) {
-        try {
-          room.scores = await loadActiveScores();
-        } catch (err) {
-          console.error('[room] failed to load scores', err);
-        }
+      // Always refresh scores on join — admin may have added players since
+      // the room came into existence.
+      try {
+        room.scores = await loadActiveScores(room.teamId);
+      } catch (err) {
+        console.error('[room] failed to load scores', err);
       }
 
       ack({ ok: true });
@@ -132,17 +139,29 @@ export function attachSockets(httpServer: HTTPServer): Io {
       sendGameState(socket, room);
     });
 
-    socket.on('player:identify', (payload, ack) => {
+    socket.on('player:identify', async (payload, ack) => {
       const room = rooms.get(socket.data.joinedRoomCode ?? '');
       if (!room) return ack({ ok: false, error: 'not in a room' });
       const member = room.members.get(socket.id);
       if (!member) return ack({ ok: false, error: 'not a member' });
+      // Refresh scores in case a self-service create just happened
+      try {
+        room.scores = await loadActiveScores(room.teamId);
+      } catch (err) {
+        console.error('[room] failed to refresh scores', err);
+      }
       const score = room.scores.find((s) => s.playerId === payload.playerId);
       if (!score) return ack({ ok: false, error: 'unknown player id' });
       member.playerId = payload.playerId;
       member.name = score.name;
       ack({ ok: true });
       broadcastRoomState(io, room.code);
+      // Push refreshed scores to anyone listening
+      io.to(room.code).emit('game:state', {
+        game: room.game,
+        scores: room.scores,
+        lastAdjust: room.lastAdjust,
+      });
     });
 
     socket.on('player:buzz', (ack) => {
@@ -166,7 +185,6 @@ export function attachSockets(httpServer: HTTPServer): Io {
       ack({ ok: true });
       broadcastGameState(io, room);
 
-      // Schedule timeout — if the player doesn't submit in 10s, auto-handle
       const buzzedRoomCode = room.code;
       const buzzedClueId = clue.id;
       const buzzedPlayerId = member.playerId;
@@ -207,6 +225,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
         reasoning: null,
       };
       clue.buzzedPlayerId = null;
+      clue.buzzedAt = null;
       clue.typingAnswer = '';
       broadcastGameState(io, room);
 
@@ -216,7 +235,6 @@ export function attachSockets(httpServer: HTTPServer): Io {
         text,
       );
 
-      // Re-fetch the room and clue in case the host advanced past it while we were judging.
       const fresh = rooms.get(room.code);
       if (!fresh || fresh.game.activeClue?.id !== clue.id) {
         ack({ ok: true });
@@ -308,6 +326,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
       const clue = room.game.activeClue;
       if (!clue) return ack({ ok: false, error: 'no active clue' });
       clue.buzzedPlayerId = null;
+      clue.buzzedAt = null;
       clue.typingAnswer = '';
       clue.pendingJudgement = null;
       ack({ ok: true });
@@ -322,14 +341,14 @@ export function attachSockets(httpServer: HTTPServer): Io {
       if (!clue || !pending) return ack({ ok: false, error: 'no pending judgement' });
 
       try {
-        await adjustPlayerScore(pending.playerId, clue.value);
+        await adjustPlayerScore(pending.playerId, room.teamId, clue.value);
       } catch (err) {
         return ack({
           ok: false,
           error: err instanceof Error ? err.message : 'score update failed',
         });
       }
-      const refreshed = await loadActiveScores();
+      const refreshed = await loadActiveScores(room.teamId);
       room.scores = refreshed;
       const player = refreshed.find((s) => s.playerId === pending.playerId);
       room.lastAdjust = {
@@ -339,7 +358,6 @@ export function attachSockets(httpServer: HTTPServer): Io {
       };
       clue.revealed = true;
       clue.pendingJudgement = null;
-      // Mark clue used and close it
       if (!room.game.usedClueIds.includes(clue.id)) {
         room.game.usedClueIds.push(clue.id);
       }
@@ -355,17 +373,14 @@ export function attachSockets(httpServer: HTTPServer): Io {
       const pending = clue?.pendingJudgement;
       if (!clue || !pending) return ack({ ok: false, error: 'no pending judgement' });
 
-      // Apply leader penalty if applicable
       const penalty = computeLeaderPenalty(room.scores);
-      let penaltyApplied = 0;
       if (penalty.active && pending.playerId === penalty.leaderId) {
         try {
-          await adjustPlayerScore(pending.playerId, -clue.value);
-          penaltyApplied = clue.value;
+          await adjustPlayerScore(pending.playerId, room.teamId, -clue.value);
         } catch (err) {
           console.error('[room] penalty adjust failed', err);
         }
-        const refreshed = await loadActiveScores();
+        const refreshed = await loadActiveScores(room.teamId);
         room.scores = refreshed;
         room.lastAdjust = {
           playerId: pending.playerId,
@@ -374,14 +389,12 @@ export function attachSockets(httpServer: HTTPServer): Io {
         };
       }
 
-      // Lockout the player and clear pending state
       if (!clue.lockedOutPlayerIds.includes(pending.playerId)) {
         clue.lockedOutPlayerIds.push(pending.playerId);
       }
       clue.pendingJudgement = null;
       ack({ ok: true });
       broadcastGameState(io, room);
-      void penaltyApplied; // silence unused — useful for future logging
     });
 
     socket.on('host:adjust_score', async (payload, ack) => {
@@ -390,14 +403,14 @@ export function attachSockets(httpServer: HTTPServer): Io {
       if (typeof payload.playerId !== 'number' || typeof payload.delta !== 'number')
         return ack({ ok: false, error: 'invalid payload' });
       try {
-        await adjustPlayerScore(payload.playerId, payload.delta);
+        await adjustPlayerScore(payload.playerId, room.teamId, payload.delta);
       } catch (err) {
         return ack({
           ok: false,
           error: err instanceof Error ? err.message : 'score update failed',
         });
       }
-      const refreshed = await loadActiveScores();
+      const refreshed = await loadActiveScores(room.teamId);
       room.scores = refreshed;
       const player = refreshed.find((s) => s.playerId === payload.playerId);
       room.lastAdjust = {
@@ -415,14 +428,14 @@ export function attachSockets(httpServer: HTTPServer): Io {
       const last = room.lastAdjust;
       if (!last) return ack({ ok: false, error: 'nothing to undo' });
       try {
-        await adjustPlayerScore(last.playerId, -last.delta);
+        await adjustPlayerScore(last.playerId, room.teamId, -last.delta);
       } catch (err) {
         return ack({
           ok: false,
           error: err instanceof Error ? err.message : 'undo failed',
         });
       }
-      room.scores = await loadActiveScores();
+      room.scores = await loadActiveScores(room.teamId);
       room.lastAdjust = null;
       ack({ ok: true });
       broadcastGameState(io, room);
@@ -435,18 +448,17 @@ export function attachSockets(httpServer: HTTPServer): Io {
       if (!room) return;
       const member = room.members.get(socket.id);
       room.members.delete(socket.id);
-      // If a player who currently has the floor disconnects, clear the buzz so others can try
       if (
         member?.playerId !== null &&
         member?.playerId !== undefined &&
         room.game.activeClue?.buzzedPlayerId === member.playerId
       ) {
         room.game.activeClue.buzzedPlayerId = null;
+        room.game.activeClue.buzzedAt = null;
         room.game.activeClue.typingAnswer = '';
         broadcastGameState(io, room);
       }
       if (room.hostSocketId === socket.id) {
-        // Start a grace period instead of closing immediately
         room.hostSocketId = null;
         room.hostDisconnectedAt = Date.now();
         room.hostGraceTimer = setTimeout(() => {
@@ -490,12 +502,11 @@ async function handleBuzzTimeout(
   if (!room) return;
   const clue = room.game.activeClue;
   if (!clue || clue.id !== clueId) return;
-  if (clue.buzzedPlayerId !== playerId) return; // already resolved
+  if (clue.buzzedPlayerId !== playerId) return;
   if (clue.pendingJudgement) return;
 
   const text = clue.typingAnswer.trim();
   if (text) {
-    // Auto-submit whatever they typed — same path as a normal submission
     const playerName =
       room.scores.find((s) => s.playerId === playerId)?.name ?? `Player ${playerId}`;
     clue.pendingJudgement = {
@@ -538,7 +549,6 @@ async function handleBuzzTimeout(
     return;
   }
 
-  // Empty answer — lock the player out and clear the buzz
   if (!clue.lockedOutPlayerIds.includes(playerId)) {
     clue.lockedOutPlayerIds.push(playerId);
   }
@@ -563,6 +573,8 @@ function broadcastRoomState(io: Io, code: string): void {
   if (!room) return;
   io.to(code).emit('room:state', {
     code: room.code,
+    teamId: room.teamId,
+    teamName: room.teamName,
     members: [...room.members.values()].map((m) => ({
       socketId: m.socketId,
       name: m.name,
