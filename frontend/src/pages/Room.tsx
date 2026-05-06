@@ -38,9 +38,11 @@ function RoomShell() {
       <HostAwayBanner />
       <main className="flex-1 grid grid-cols-[1fr_320px] gap-4 p-4">
         <section className="flex flex-col gap-4">
-          <div className="flex justify-center">
-            <CharacterCanvas />
-          </div>
+          {isHost && (
+            <div className="flex justify-center">
+              <CharacterCanvas />
+            </div>
+          )}
           <GameBoard />
         </section>
         <aside>

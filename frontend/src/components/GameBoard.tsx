@@ -25,6 +25,7 @@ export function GameBoard() {
   }
 
   async function handlePickClue(clueId: number, question: string) {
+    if (!isHost) return;
     const resp = await actions.revealClue(clueId);
     if (resp.ok) {
       void speak(question);
