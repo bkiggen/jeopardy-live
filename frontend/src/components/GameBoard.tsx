@@ -125,28 +125,30 @@ export function GameBoard() {
         </span>
       </div>
 
-      <div className="grid grid-cols-5 gap-3 flex-1">
-        {round.clues.map((c) => {
-          const used = usedClueIds.has(c.id);
-          const interactive = isHost && !used;
-          return (
-            <button
-              type="button"
-              key={c.id}
-              disabled={!interactive}
-              onClick={() => handlePickClue(c.id, c.question)}
-              className={`rounded-lg font-display tracking-wider py-12 transition-all duration-150 ${
-                used
-                  ? 'bg-jeopardy-navy-darker/60 text-transparent cursor-not-allowed'
-                  : interactive
-                    ? 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile hover:bg-blue-700 hover:scale-[1.03] active:scale-95 cursor-pointer shadow-inner'
-                    : 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile cursor-default'
-              }`}
-            >
-              {used ? '·' : `$${c.value}`}
-            </button>
-          );
-        })}
+      <div className="flex-1 flex items-center">
+        <div className="grid grid-cols-5 gap-3 w-full">
+          {round.clues.map((c) => {
+            const used = usedClueIds.has(c.id);
+            const interactive = isHost && !used;
+            return (
+              <button
+                type="button"
+                key={c.id}
+                disabled={!interactive}
+                onClick={() => handlePickClue(c.id, c.question)}
+                className={`rounded-lg font-display tracking-wider h-40 flex items-center justify-center transition-all duration-150 ${
+                  used
+                    ? 'bg-jeopardy-navy-darker/60 text-transparent cursor-not-allowed'
+                    : interactive
+                      ? 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile hover:bg-blue-700 hover:scale-[1.03] active:scale-95 cursor-pointer shadow-inner'
+                      : 'bg-jeopardy-navy-deep text-jeopardy-gold text-5xl text-shadow-tile cursor-default'
+                }`}
+              >
+                {used ? '·' : `$${c.value}`}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {activeClue && <ClueModal />}
