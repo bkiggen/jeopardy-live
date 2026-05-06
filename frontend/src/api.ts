@@ -126,6 +126,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  createRoom: () =>
+    request<{ code: string; createdAt: number }>('/api/rooms', { method: 'POST' }),
+  getRoom: (code: string) =>
+    request<{ code: string; memberCount: number; hostConnected: boolean }>(
+      `/api/rooms/${encodeURIComponent(code)}`,
+    ),
 };
 
 export type JudgeOutcome =

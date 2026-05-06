@@ -1,0 +1,230 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { GameBoard } from '../components/GameBoard';
+import { ScoreBoard } from '../components/ScoreBoard';
+import { CharacterCanvas } from '../components/CharacterCanvas';
+import { api, type Player, type Season } from '../api';
+import { usePasscode } from '../context/PasscodeContext';
+import { RoomProvider, useRoom } from '../context/RoomContext';
+
+export type LastAdjust = {
+  playerId: number;
+  playerName: string;
+  delta: number;
+};
+
+export function Room() {
+  const { code } = useParams<{ code: string }>();
+  const [search] = useSearchParams();
+  const isHost = search.get('host') === '1';
+
+  if (!code || code.length !== 4) {
+    return <RoomError message="Invalid room code." />;
+  }
+
+  return (
+    <RoomProvider code={code.toUpperCase()} isHost={isHost}>
+      <RoomShell />
+    </RoomProvider>
+  );
+}
+
+function RoomShell() {
+  const navigate = useNavigate();
+  const { code, isHost, status, errorMessage, members } = useRoom();
+
+  if (status === 'closed' || status === 'error') {
+    return <RoomError message={errorMessage ?? 'Connection lost.'} />;
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <RoomHeader code={code} isHost={isHost} status={status} memberCount={members.length} />
+      {isHost ? <HostView /> : <PlayerStub code={code} memberCount={members.length} />}
+      <button
+        type="button"
+        onClick={() => navigate('/')}
+        className="fixed bottom-4 left-4 text-jeopardy-cream/40 hover:text-jeopardy-cream/80 text-xs uppercase tracking-widest"
+      >
+        ← Leave
+      </button>
+    </div>
+  );
+}
+
+function RoomHeader({
+  code,
+  isHost,
+  status,
+  memberCount,
+}: {
+  code: string;
+  isHost: boolean;
+  status: string;
+  memberCount: number;
+}) {
+  const shareUrl = `${window.location.origin}/r/${code}`;
+  const [copied, setCopied] = useState(false);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <header className="flex items-center justify-between px-6 py-3 border-b-2 border-jeopardy-gold/40 bg-jeopardy-navy-darker">
+      <div className="flex items-center gap-3">
+        <Link
+          to="/"
+          className="font-display text-jeopardy-gold text-3xl tracking-widest text-shadow-tile hover:opacity-80"
+        >
+          STANDUP JEOPARDY
+        </Link>
+        <span className="px-2 py-0.5 rounded border border-jeopardy-gold/50 text-jeopardy-gold/80 text-xs uppercase tracking-widest">
+          {isHost ? 'host' : 'player'}
+        </span>
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={copyLink}
+          className="text-jeopardy-cream/70 hover:text-jeopardy-cream text-xs uppercase tracking-widest"
+        >
+          {copied ? '✓ link copied' : 'Copy invite link'}
+        </button>
+        <span className="font-display text-jeopardy-gold text-3xl tracking-[0.4em]">
+          {code}
+        </span>
+        <span
+          className={`text-xs uppercase tracking-widest ${
+            status === 'connected'
+              ? 'text-green-400'
+              : status === 'connecting'
+                ? 'text-yellow-400'
+                : 'text-red-400'
+          }`}
+          title={`${memberCount} connected`}
+        >
+          ● {status}
+        </span>
+      </div>
+    </header>
+  );
+}
+
+function HostView() {
+  const { callProtected } = usePasscode();
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [, setActiveSeason] = useState<Season | null>(null);
+  const [lastAdjust, setLastAdjust] = useState<LastAdjust | null>(null);
+
+  const refreshPlayers = useCallback(async () => {
+    try {
+      setPlayers(await api.getPlayers());
+    } catch (err) {
+      console.error('failed to load players', err);
+    }
+  }, []);
+
+  const refreshSeason = useCallback(async () => {
+    try {
+      const seasons = await api.getSeasons();
+      setActiveSeason(seasons.find((s) => s.isActive) ?? null);
+    } catch (err) {
+      console.error('failed to load seasons', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshPlayers();
+    void refreshSeason();
+  }, [refreshPlayers, refreshSeason]);
+
+  const award = useCallback(
+    async (playerId: number, delta: number) => {
+      const player = players.find((p) => p.id === playerId);
+      const result = await callProtected(
+        () => api.adjustScore(playerId, delta),
+        { message: 'Enter the host passcode to award points.' },
+      );
+      if (result == null) return;
+      setLastAdjust({
+        playerId,
+        playerName: player?.name ?? `Player ${playerId}`,
+        delta,
+      });
+      await refreshPlayers();
+    },
+    [callProtected, players, refreshPlayers],
+  );
+
+  const undo = useCallback(async () => {
+    if (!lastAdjust) return;
+    const result = await callProtected(() =>
+      api.adjustScore(lastAdjust.playerId, -lastAdjust.delta),
+    );
+    if (result == null) return;
+    setLastAdjust(null);
+    await refreshPlayers();
+  }, [callProtected, lastAdjust, refreshPlayers]);
+
+  return (
+    <main className="flex-1 grid grid-cols-[1fr_320px] gap-4 p-4">
+      <section className="flex flex-col gap-4">
+        <div className="flex justify-center">
+          <CharacterCanvas />
+        </div>
+        <GameBoard players={players} award={award} />
+      </section>
+      <aside>
+        <ScoreBoard players={players} lastAdjust={lastAdjust} onUndo={undo} />
+      </aside>
+    </main>
+  );
+}
+
+function PlayerStub({ code, memberCount }: { code: string; memberCount: number }) {
+  return (
+    <main className="flex-1 flex flex-col items-center justify-center gap-6 p-6 text-center">
+      <h2 className="font-display text-jeopardy-gold text-5xl tracking-wider text-shadow-tile">
+        ROOM {code}
+      </h2>
+      <p className="text-jeopardy-cream/70 max-w-md">
+        You're in. Waiting for the host to start a round.
+      </p>
+      <p className="text-jeopardy-cream/40 text-sm">
+        {memCountLabel(memberCount)} in the room.
+      </p>
+      <p className="text-jeopardy-cream/30 text-xs italic max-w-sm">
+        Phase B: state sync, buzzers and answer entry land in Phase C/D.
+      </p>
+    </main>
+  );
+}
+
+function memCountLabel(n: number): string {
+  if (n === 1) return '1 person';
+  return `${n} people`;
+}
+
+function RoomError({ message }: { message: string }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6">
+      <h2 className="font-display text-jeopardy-gold text-4xl tracking-widest">
+        ROOM UNAVAILABLE
+      </h2>
+      <p className="text-jeopardy-cream/70 text-center max-w-md">{message}</p>
+      <Link
+        to="/"
+        className="px-5 py-2 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold hover:bg-jeopardy-cream"
+      >
+        Back to start
+      </Link>
+    </div>
+  );
+}

@@ -6,6 +6,7 @@ import scoresRouter from './routes/scores.js';
 import seasonsRouter from './routes/seasons.js';
 import hostRouter from './routes/host.js';
 import judgeRouter from './routes/judge.js';
+import roomsRouter from './routes/rooms.js';
 
 export function createApp() {
   const app = express();
@@ -22,6 +23,7 @@ export function createApp() {
   app.use('/api/seasons', seasonsRouter);
   app.use('/api/host', hostRouter);
   app.use('/api/judge', judgeRouter);
+  app.use('/api/rooms', roomsRouter);
 
   return app;
 }
