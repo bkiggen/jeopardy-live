@@ -116,7 +116,7 @@ fly ssh console -C "node -e \"require('./node_modules/@prisma/client').PrismaCli
 Also seed the active season:
 
 ```bash
-fly ssh console -C "npx prisma db seed"
+fly ssh console -C "npm run seed:prod"
 ```
 
 ---

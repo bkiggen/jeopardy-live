@@ -12,13 +12,14 @@
     "test:watch": "vitest",
     "import-clues": "tsx src/scripts/importClues.ts",
     "import-clues:prod": "node dist/scripts/importClues.js",
+    "seed:prod": "node dist/scripts/seed.js",
     "generate-audio": "tsx src/scripts/generateAudio.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",

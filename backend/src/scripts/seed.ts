@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { prisma } from '../src/prisma.js';
-import { currentQuarterName } from '../src/lib/season.js';
+import { prisma } from '../prisma.js';
+import { currentQuarterName } from '../lib/season.js';
 
 async function main() {
   const existing = await prisma.season.findFirst({ where: { isActive: true } });
