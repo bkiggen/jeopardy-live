@@ -41,6 +41,7 @@ type RoomActions = {
   cancelBuzz: () => Promise<AckResponse>;
   identifyPlayer: (playerId: number) => Promise<AckResponse>;
   buzz: () => Promise<AckResponse>;
+  pass: () => Promise<AckResponse>;
   typing: (text: string) => Promise<AckResponse>;
   submit: (text: string) => Promise<AckResponse>;
 };
@@ -222,6 +223,7 @@ export function RoomProvider({ code, isHost, children }: Props) {
       cancelBuzz: () => emit('host:cancel_buzz'),
       identifyPlayer,
       buzz: () => emit('player:buzz'),
+      pass: () => emit('player:pass'),
       typing: (text) => emit('player:typing', { text }),
       submit: (text) => emit('player:submit', { text }),
     };

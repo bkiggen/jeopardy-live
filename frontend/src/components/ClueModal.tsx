@@ -124,13 +124,23 @@ export function ClueModal() {
       {/* Controls */}
       <div className="border-t-2 border-jeopardy-gold/40 pt-3 flex flex-col gap-3">
         {canBuzz && (
-          <button
-            type="button"
-            onClick={() => actions.buzz()}
-            className="w-full py-6 bg-red-600 hover:bg-red-500 active:scale-95 transition-all rounded-lg font-display text-jeopardy-cream text-4xl tracking-[0.4em] shadow-lg"
-          >
-            BUZZ
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => actions.buzz()}
+              className="flex-1 py-6 bg-red-600 hover:bg-red-500 active:scale-95 transition-all rounded-lg font-display text-jeopardy-cream text-4xl tracking-[0.4em] shadow-lg"
+            >
+              BUZZ
+            </button>
+            <button
+              type="button"
+              onClick={() => actions.pass()}
+              title="I don't know — lock me out for this clue"
+              className="shrink-0 px-6 py-6 bg-white/10 hover:bg-white/20 active:scale-95 transition-all rounded-lg font-display text-jeopardy-cream/80 text-2xl tracking-widest"
+            >
+              PASS
+            </button>
+          </div>
         )}
 
         {myPlayerId !== null && lockedOut && !pending && !isMyBuzz && (

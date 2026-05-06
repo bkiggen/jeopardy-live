@@ -61,6 +61,7 @@ type ClientToServer = {
   'host:cancel_buzz': (ack: Ack) => void;
   'player:identify': (payload: { playerId: number }, ack: Ack) => void;
   'player:buzz': (ack: Ack) => void;
+  'player:pass': (ack: Ack) => void;
   'player:typing': (payload: { text: string }, ack: Ack) => void;
   'player:submit': (payload: { text: string }, ack: Ack) => void;
 };
@@ -191,6 +192,25 @@ export function attachSockets(httpServer: HTTPServer): Io {
       setTimeout(() => {
         void handleBuzzTimeout(io, buzzedRoomCode, buzzedClueId, buzzedPlayerId);
       }, BUZZ_TIMEOUT_MS);
+    });
+
+    socket.on('player:pass', (ack) => {
+      const room = rooms.get(socket.data.joinedRoomCode ?? '');
+      if (!room) return ack({ ok: false, error: 'not in a room' });
+      const member = room.members.get(socket.id);
+      if (!member?.playerId)
+        return ack({ ok: false, error: 'pick a player first' });
+      const clue = room.game.activeClue;
+      if (!clue || clue.revealed)
+        return ack({ ok: false, error: 'no clue is open' });
+      if (clue.buzzedPlayerId === member.playerId)
+        return ack({ ok: false, error: 'you already buzzed — submit or wait it out' });
+      if (clue.lockedOutPlayerIds.includes(member.playerId)) {
+        return ack({ ok: true });
+      }
+      clue.lockedOutPlayerIds.push(member.playerId);
+      ack({ ok: true });
+      broadcastGameState(io, room);
     });
 
     socket.on('player:typing', (payload, ack) => {
