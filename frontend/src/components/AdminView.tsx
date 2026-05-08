@@ -48,6 +48,8 @@ export function AdminView({ refreshPlayers }: Props) {
 
   const [openSeasonId, setOpenSeasonId] = useState<number | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [editingScorePlayerId, setEditingScorePlayerId] = useState<number | null>(null);
+  const [editingScoreValue, setEditingScoreValue] = useState('');
 
   const refreshTeams = useCallback(async () => {
     try {
@@ -374,6 +376,39 @@ export function AdminView({ refreshPlayers }: Props) {
     const board = await api.getLeaderboard(id, selectedTeamId);
     setOpenSeasonId(id);
     setLeaderboard(board);
+  }
+
+  function startEditingScore(entry: LeaderboardEntry) {
+    setEditingScorePlayerId(entry.playerId);
+    setEditingScoreValue(String(entry.totalScore));
+  }
+  function cancelEditingScore() {
+    setEditingScorePlayerId(null);
+    setEditingScoreValue('');
+  }
+  async function saveScore(entry: LeaderboardEntry) {
+    if (openSeasonId === null || selectedTeamId === null) return;
+    const next = Number.parseInt(editingScoreValue, 10);
+    if (!Number.isFinite(next)) {
+      cancelEditingScore();
+      return;
+    }
+    if (next === entry.totalScore) {
+      cancelEditingScore();
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await callProtected(() =>
+        api.setScore(entry.playerId, selectedTeamId, openSeasonId, next),
+      );
+      if (result == null) return;
+      const board = await api.getLeaderboard(openSeasonId, selectedTeamId);
+      setLeaderboard(board);
+      cancelEditingScore();
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -826,29 +861,76 @@ export function AdminView({ refreshPlayers }: Props) {
                     </p>
                     {leaderboard.length === 0 ? (
                       <p className="text-jeopardy-cream/40 text-sm py-2">
-                        No scores recorded.
+                        No players on this team.
                       </p>
                     ) : (
                       <ol className="flex flex-col gap-1 mt-2">
-                        {leaderboard.map((e, i) => (
-                          <li
-                            key={e.playerId}
-                            className="flex justify-between text-sm py-1"
-                          >
-                            <span className="text-jeopardy-cream">
-                              {i + 1}. {e.name}
-                            </span>
-                            <span
-                              className={`font-mono ${
-                                e.totalScore < 0
-                                  ? 'text-red-400'
-                                  : 'text-jeopardy-gold'
-                              }`}
+                        {leaderboard.map((e, i) => {
+                          const editing = e.playerId === editingScorePlayerId;
+                          return (
+                            <li
+                              key={e.playerId}
+                              className="flex items-center justify-between gap-2 text-sm py-1"
                             >
-                              ${e.totalScore.toLocaleString()}
-                            </span>
-                          </li>
-                        ))}
+                              <span className="text-jeopardy-cream flex-1 min-w-0 truncate">
+                                {i + 1}. {e.name}
+                              </span>
+                              {editing ? (
+                                <form
+                                  onSubmit={(ev) => {
+                                    ev.preventDefault();
+                                    void saveScore(e);
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <input
+                                    type="number"
+                                    step={1}
+                                    value={editingScoreValue}
+                                    onChange={(ev) => setEditingScoreValue(ev.target.value)}
+                                    autoFocus
+                                    className="w-28 px-2 py-1 rounded bg-white/10 text-jeopardy-cream font-mono border border-jeopardy-gold/30 text-right"
+                                  />
+                                  <button
+                                    type="submit"
+                                    disabled={busy}
+                                    className="shrink-0 px-3 py-1 bg-jeopardy-gold text-jeopardy-navy-deep rounded text-xs font-bold disabled:opacity-50"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelEditingScore}
+                                    className="shrink-0 px-3 py-1 bg-white/10 text-jeopardy-cream rounded text-xs hover:bg-white/20"
+                                  >
+                                    Cancel
+                                  </button>
+                                </form>
+                              ) : (
+                                <>
+                                  <span
+                                    className={`font-mono ${
+                                      e.totalScore < 0
+                                        ? 'text-red-400'
+                                        : 'text-jeopardy-gold'
+                                    }`}
+                                  >
+                                    ${e.totalScore.toLocaleString()}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditingScore(e)}
+                                    disabled={busy}
+                                    className="shrink-0 px-2 py-1 text-jeopardy-cream/60 hover:text-jeopardy-cream text-sm disabled:opacity-50"
+                                    title="Edit score"
+                                  >
+                                    ✎
+                                  </button>
+                                </>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ol>
                     )}
                   </div>

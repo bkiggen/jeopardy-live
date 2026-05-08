@@ -27,19 +27,23 @@ router.get('/:id/scores', async (req, res) => {
     return;
   }
 
-  const scores = await prisma.seasonScore.findMany({
-    where: { seasonId: id, teamId },
-    include: { player: true },
-    orderBy: { totalScore: 'desc' },
+  // Include every team player so the admin can set scores for players who
+  // have no SeasonScore row yet — they show up at 0.
+  const players = await prisma.player.findMany({
+    where: { teamId },
+    include: { scores: { where: { seasonId: id, teamId } } },
   });
 
-  res.json(
-    scores.map((s) => ({
-      playerId: s.playerId,
-      name: s.player.name,
-      totalScore: s.totalScore,
-    })),
+  const entries = players.map((p) => ({
+    playerId: p.id,
+    name: p.name,
+    totalScore: p.scores[0]?.totalScore ?? 0,
+  }));
+  entries.sort(
+    (a, b) => b.totalScore - a.totalScore || a.name.localeCompare(b.name),
   );
+
+  res.json(entries);
 });
 
 // POST /api/seasons — start a new active season (deactivates others)

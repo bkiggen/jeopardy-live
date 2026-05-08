@@ -46,4 +46,52 @@ router.post('/adjust', requirePasscode, async (req, res) => {
   });
 });
 
+// POST /api/scores/set — { playerId, teamId, seasonId, totalScore } -> upserts an
+// absolute season score for any season (not just the active one). Used by admin
+// to manually correct totals.
+router.post('/set', requirePasscode, async (req, res) => {
+  const { playerId, teamId, seasonId, totalScore } = req.body as {
+    playerId?: number;
+    teamId?: number;
+    seasonId?: number;
+    totalScore?: number;
+  };
+  if (
+    typeof playerId !== 'number' ||
+    typeof teamId !== 'number' ||
+    typeof seasonId !== 'number' ||
+    typeof totalScore !== 'number' ||
+    !Number.isInteger(totalScore)
+  ) {
+    res.status(400).json({
+      error: 'playerId, teamId, seasonId, and integer totalScore are required',
+    });
+    return;
+  }
+
+  const [player, team, season] = await Promise.all([
+    prisma.player.findUnique({ where: { id: playerId }, select: { teamId: true } }),
+    prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }),
+    prisma.season.findUnique({ where: { id: seasonId }, select: { id: true } }),
+  ]);
+  if (!player || !team || !season) {
+    res.status(404).json({ error: 'player, team, or season not found' });
+    return;
+  }
+  if (player.teamId !== teamId) {
+    res.status(400).json({ error: 'player does not belong to that team' });
+    return;
+  }
+
+  await prisma.seasonScore.upsert({
+    where: {
+      playerId_seasonId_teamId: { playerId, seasonId, teamId },
+    },
+    update: { totalScore },
+    create: { playerId, seasonId, teamId, totalScore },
+  });
+
+  res.json({ playerId, seasonId, teamId, totalScore });
+});
+
 export default router;

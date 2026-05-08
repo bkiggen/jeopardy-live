@@ -230,6 +230,19 @@ export const api = {
       '/api/scores/adjust',
       { method: 'POST', body: JSON.stringify({ playerId, teamId, delta }) },
     ),
+  setScore: (
+    playerId: number,
+    teamId: number,
+    seasonId: number,
+    totalScore: number,
+  ) =>
+    request<{ playerId: number; seasonId: number; teamId: number; totalScore: number }>(
+      '/api/scores/set',
+      {
+        method: 'POST',
+        body: JSON.stringify({ playerId, teamId, seasonId, totalScore }),
+      },
+    ),
   getRandomCategory: (round: 'single' | 'double') =>
     request<RoundData>(`/api/clues/random-category?round=${round}`),
   getFinal: () => request<FinalClue>('/api/clues/final'),
