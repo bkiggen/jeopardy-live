@@ -13,7 +13,7 @@ router.get('/', async (_req, res) => {
 
 // POST /api/settings — host-only.
 router.post('/', requirePasscode, async (req, res) => {
-  const next = updateSettings(req.body ?? {});
+  const next = await updateSettings(req.body ?? {});
   res.json({ ...next, voices: publicVoices() });
 });
 

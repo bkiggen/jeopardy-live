@@ -285,6 +285,8 @@ export const api = {
 export type AppSettings = {
   moneyBurningMode: boolean;
   voice: string;
+  buzzAnswerSeconds: number;
+  finalAnswerSeconds: number;
   voices: Array<{ id: string; label: string }>;
 };
 

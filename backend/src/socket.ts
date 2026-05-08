@@ -21,6 +21,7 @@ import {
 } from './lib/game.js';
 import { corsOrigin } from './lib/cors.js';
 import { findTeamByCode } from './lib/teams.js';
+import { getSettings } from './lib/settings.js';
 
 type JoinPayload = { code: string; isHost: boolean; passcode?: string };
 type Ack = (resp: { ok: boolean; error?: string }) => void;
@@ -98,8 +99,6 @@ type AppSocket = Socket<ClientToServer, ServerToClient, Record<string, never>, S
 
 const RATIO = 1.5;
 const HOST_GRACE_MS = 60_000;
-const BUZZ_TIMEOUT_MS = 10_000;
-const FINAL_ANSWER_MS = 30_000;
 
 export function attachSockets(httpServer: HTTPServer): Io {
   const io: Io = new Server(httpServer, {
@@ -212,7 +211,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
       const buzzedPlayerId = member.playerId;
       setTimeout(() => {
         void handleBuzzTimeout(io, buzzedRoomCode, buzzedClueId, buzzedPlayerId);
-      }, BUZZ_TIMEOUT_MS);
+      }, getSettings().buzzAnswerSeconds * 1000);
     });
 
     socket.on('player:pass', (ack) => {
@@ -883,15 +882,16 @@ function sendGameState(socket: AppSocket, room: Room): void {
 function startAnswerPhase(io: Io, room: Room): void {
   const final = room.game.final;
   if (!final) return;
+  const finalMs = getSettings().finalAnswerSeconds * 1000;
   final.phase = 'answering';
-  final.answerDeadline = Date.now() + FINAL_ANSWER_MS;
+  final.answerDeadline = Date.now() + finalMs;
   if (room.finalAnswerTimer) clearTimeout(room.finalAnswerTimer);
   room.finalAnswerTimer = setTimeout(() => {
     const stillThere = rooms.get(room.code);
     if (!stillThere || stillThere !== room) return;
     if (room.game.final?.phase !== 'answering') return;
     void revealFinal(io, room);
-  }, FINAL_ANSWER_MS);
+  }, finalMs);
   broadcastGameState(io, room);
 }
 

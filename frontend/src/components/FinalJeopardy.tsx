@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRoom } from '../context/RoomContext';
 import { useHostContext } from '../context/HostContext';
 import { useFinalTheme } from '../hooks/useFinalTheme';
+import { useSettings } from '../hooks/useSettings';
 import type { FinalState } from '../api';
 
 const MONTHS = [
@@ -190,12 +191,15 @@ function AnswerPhase({
   myPlayerId: number | null;
   onAnswer: (text: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
+  const { settings } = useSettings();
   const myEligible = myPlayerId != null && Boolean(final.starting[myPlayerId]);
   const myEntry = myEligible ? final.entries[myPlayerId!] : null;
   const [answer, setAnswer] = useState(myEntry?.answer ?? '');
   const [submitted, setSubmitted] = useState(Boolean(myEntry?.answered));
   const [secondsLeft, setSecondsLeft] = useState(() =>
-    final.answerDeadline ? Math.max(0, Math.ceil((final.answerDeadline - Date.now()) / 1000)) : 30,
+    final.answerDeadline
+      ? Math.max(0, Math.ceil((final.answerDeadline - Date.now()) / 1000))
+      : settings.finalAnswerSeconds,
   );
 
   // Theme song plays on the host's machine for the duration of the answer phase.

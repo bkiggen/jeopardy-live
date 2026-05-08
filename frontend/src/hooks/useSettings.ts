@@ -4,6 +4,8 @@ import { api, type AppSettings } from '../api';
 const DEFAULTS: AppSettings = {
   moneyBurningMode: false,
   voice: 'daniel',
+  buzzAnswerSeconds: 10,
+  finalAnswerSeconds: 30,
   voices: [],
 };
 

@@ -56,6 +56,19 @@ model SeasonScore {
   @@map("season_scores")
 }
 
+// Single-row table holding global runtime settings. Only one row ever exists
+// (id = 1, enforced by CHECK constraint). Read at boot, written through on
+// every admin update.
+model AppSetting {
+  id                 Int     @id @default(1)
+  moneyBurningMode   Boolean @default(false) @map("money_burning_mode")
+  voice              String  @default("daniel") @db.VarChar(40)
+  buzzAnswerSeconds  Int     @default(10) @map("buzz_answer_seconds")
+  finalAnswerSeconds Int     @default(30) @map("final_answer_seconds")
+
+  @@map("app_settings")
+}
+
 model Clue {
   id         Int       @id @default(autoincrement())
   showNumber Int?      @map("show_number")

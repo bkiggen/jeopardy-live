@@ -347,6 +347,21 @@ export function AdminView({ refreshPlayers }: Props) {
     }
   }
 
+  async function saveTimer(field: 'buzzAnswerSeconds' | 'finalAnswerSeconds', value: number) {
+    if (!Number.isFinite(value) || value < 3 || value > 300) return;
+    const rounded = Math.round(value);
+    if (rounded === settings[field]) return;
+    setBusy(true);
+    try {
+      const result = await callProtected(() => api.setSettings({ [field]: rounded }));
+      if (result == null) return;
+      setSettings(result);
+    } finally {
+      setBusy(false);
+      void refreshSettings();
+    }
+  }
+
   async function selectVoice(voiceId: string) {
     // Same clip every time so voices can be A/B compared.
     try {
@@ -464,6 +479,21 @@ export function AdminView({ refreshPlayers }: Props) {
               {settings.moneyBurningMode ? 'ON' : 'OFF'}
             </button>
           </div>
+
+          <TimerSetting
+            label="Answer time after buzz"
+            help="Seconds a buzzed-in player has to type and submit. (3–300)"
+            value={settings.buzzAnswerSeconds}
+            disabled={busy}
+            onSave={(v) => saveTimer('buzzAnswerSeconds', v)}
+          />
+          <TimerSetting
+            label="Final Jeopardy answer time"
+            help="Seconds players have to answer the Final clue. (3–300)"
+            value={settings.finalAnswerSeconds}
+            disabled={busy}
+            onSave={(v) => saveTimer('finalAnswerSeconds', v)}
+          />
         </div>
       </section>
 
@@ -942,5 +972,61 @@ export function AdminView({ refreshPlayers }: Props) {
         )}
       </section>
     </div>
+  );
+}
+
+function TimerSetting({
+  label,
+  help,
+  value,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  help: string;
+  value: number;
+  disabled: boolean;
+  onSave: (v: number) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+  const parsed = Number.parseInt(draft, 10);
+  const dirty = Number.isFinite(parsed) && parsed !== value;
+  const valid = Number.isFinite(parsed) && parsed >= 3 && parsed <= 300;
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (dirty && valid) void onSave(parsed);
+      }}
+      className="bg-white/5 rounded p-4 flex items-center justify-between gap-4"
+    >
+      <div className="flex flex-col gap-1 min-w-0">
+        <span className="text-jeopardy-cream font-medium">{label}</span>
+        <span className="text-jeopardy-cream/60 text-xs">{help}</span>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <input
+          type="number"
+          min={3}
+          max={300}
+          step={1}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          disabled={disabled}
+          className="w-24 px-3 py-2 rounded bg-white/10 text-jeopardy-cream font-mono border border-jeopardy-gold/30 text-right disabled:opacity-50"
+        />
+        <span className="text-jeopardy-cream/50 text-xs">sec</span>
+        <button
+          type="submit"
+          disabled={disabled || !dirty || !valid}
+          className="px-4 py-2 bg-jeopardy-gold text-jeopardy-navy-deep rounded font-bold text-sm disabled:opacity-40"
+        >
+          Save
+        </button>
+      </div>
+    </form>
   );
 }

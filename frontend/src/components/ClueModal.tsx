@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useHostContext } from '../context/HostContext';
 import { useRoom } from '../context/RoomContext';
+import { useSettings } from '../hooks/useSettings';
 import { leaderPenalty } from '../lib/penalty';
 import type { SoundClip } from '../hooks/useHost';
 
@@ -11,11 +12,12 @@ type Pending = NonNullable<
 // Renders inline inside the GameBoard panel (not a modal). The host's clue
 // content fills the same space the tile grid normally occupies, so the host
 // avatar above stays visible the whole time.
-const BUZZ_TIMEOUT_MS = 10_000;
 
 export function ClueModal() {
   const { playClip, playBuzz, playTimeUp } = useHostContext();
   const { isHost, game, members, scores, socketId, actions } = useRoom();
+  const { settings } = useSettings();
+  const buzzTimeoutMs = settings.buzzAnswerSeconds * 1000;
   const clue = game.activeClue;
 
   // Fire the buzzer sound on the host's machine when a player buzzes in.
@@ -46,7 +48,7 @@ export function ClueModal() {
     timeUpFiredRef.current = false;
     const tick = () => {
       const elapsed = Date.now() - buzzedAt;
-      const remaining = Math.max(0, BUZZ_TIMEOUT_MS - elapsed);
+      const remaining = Math.max(0, buzzTimeoutMs - elapsed);
       setRemainingMs(remaining);
       if (remaining <= 0 && !timeUpFiredRef.current) {
         timeUpFiredRef.current = true;
@@ -56,7 +58,7 @@ export function ClueModal() {
     tick();
     const interval = setInterval(tick, 100);
     return () => clearInterval(interval);
-  }, [buzzedAt, isHost, playTimeUp]);
+  }, [buzzedAt, isHost, playTimeUp, buzzTimeoutMs]);
 
   const penalty = useMemo(
     () =>
@@ -150,7 +152,11 @@ export function ClueModal() {
         )}
 
         {isMyBuzz && !pending && (
-          <MyAnswerInput actions={actions} remainingMs={remainingMs} />
+          <MyAnswerInput
+            actions={actions}
+            remainingMs={remainingMs}
+            buzzAnswerSeconds={settings.buzzAnswerSeconds}
+          />
         )}
 
         {someoneElseBuzzed && !pending && (
@@ -225,9 +231,11 @@ export function ClueModal() {
 function MyAnswerInput({
   actions,
   remainingMs,
+  buzzAnswerSeconds,
 }: {
   actions: ReturnType<typeof useRoom>['actions'];
   remainingMs: number | null;
+  buzzAnswerSeconds: number;
 }) {
   const [text, setText] = useState('');
 
@@ -273,7 +281,7 @@ function MyAnswerInput({
         </button>
       </div>
       <p className="text-jeopardy-cream/40 text-xs italic">
-        10 seconds. Everyone sees what you type live.
+        {buzzAnswerSeconds} seconds. Everyone sees what you type live.
       </p>
     </div>
   );
