@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import authRouter from './routes/auth.js';
 import cluesRouter from './routes/clues.js';
 import playersRouter from './routes/players.js';
 import scoresRouter from './routes/scores.js';
@@ -20,6 +21,7 @@ export function createApp() {
     res.json({ ok: true });
   });
 
+  app.use('/api/auth', authRouter);
   app.use('/api/clues', cluesRouter);
   app.use('/api/players', playersRouter);
   app.use('/api/scores', scoresRouter);

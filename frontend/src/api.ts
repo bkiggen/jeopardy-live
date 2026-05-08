@@ -184,6 +184,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  verifyPasscode: () =>
+    request<{ ok: boolean }>('/api/auth/verify', { method: 'POST' }),
   getTeams: () => request<Team[]>('/api/teams'),
   getTeam: (code: string) => request<Team>(`/api/teams/${encodeURIComponent(code)}`),
   addTeam: (input: { name: string; code?: string }) =>

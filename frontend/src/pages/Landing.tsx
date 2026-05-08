@@ -55,7 +55,7 @@ export function Landing() {
     try {
       // Touch a passcode-gated endpoint to confirm the user has it before
       // sending them into the room (otherwise socket join would fail mid-load).
-      const result = await callProtected(() => api.getSettings(), {
+      const result = await callProtected(() => api.verifyPasscode(), {
         message: `Enter the host passcode to host "${team.name}".`,
       });
       if (result == null) return;
