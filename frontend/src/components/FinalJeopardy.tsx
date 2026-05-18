@@ -19,6 +19,15 @@ export function FinalJeopardy() {
   const { isHost, members, socketId, game, actions } = useRoom();
   const final = game.final;
   const myPlayerId = members.find((m) => m.socketId === socketId)?.playerId ?? null;
+  const onlinePlayerIds = useMemo(
+    () =>
+      new Set(
+        members
+          .map((m) => m.playerId)
+          .filter((p): p is number => p != null),
+      ),
+    [members],
+  );
 
   if (!final) return null;
   return (
@@ -29,6 +38,7 @@ export function FinalJeopardy() {
           final={final}
           isHost={isHost}
           myPlayerId={myPlayerId}
+          onlinePlayerIds={onlinePlayerIds}
           onWager={actions.finalWager}
           onForce={actions.forceFinalAnswer}
         />
@@ -73,18 +83,24 @@ function WagerPhase({
   final,
   isHost,
   myPlayerId,
+  onlinePlayerIds,
   onWager,
   onForce,
 }: {
   final: FinalState;
   isHost: boolean;
   myPlayerId: number | null;
+  onlinePlayerIds: Set<number>;
   onWager: (w: number) => Promise<{ ok: boolean; error?: string }>;
   onForce: () => Promise<{ ok: boolean; error?: string }>;
 }) {
   const startingIds = useMemo(
     () => Object.keys(final.starting).map(Number),
     [final.starting],
+  );
+  const onlineStartingIds = useMemo(
+    () => startingIds.filter((id) => onlinePlayerIds.has(id)),
+    [startingIds, onlinePlayerIds],
   );
   const myEligible = myPlayerId != null && Boolean(final.starting[myPlayerId]);
   const myStart = myEligible ? final.starting[myPlayerId!] : null;
@@ -114,7 +130,7 @@ function WagerPhase({
     }
   }
 
-  const wageredCount = startingIds.filter((id) => final.entries[id].wagered).length;
+  const wageredCount = onlineStartingIds.filter((id) => final.entries[id].wagered).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -162,10 +178,17 @@ function WagerPhase({
         </p>
       )}
 
-      <WagerStatusList final={final} />
+      <WagerStatusList final={final} onlinePlayerIds={onlinePlayerIds} />
 
       <p className="text-jeopardy-cream/60 text-sm">
-        {wageredCount} / {startingIds.length} wagers in.
+        {wageredCount} / {onlineStartingIds.length} wagers in
+        {onlineStartingIds.length < startingIds.length && (
+          <span className="text-jeopardy-cream/40">
+            {' '}
+            (skipping {startingIds.length - onlineStartingIds.length} offline)
+          </span>
+        )}
+        .
       </p>
 
       {isHost && (
@@ -417,24 +440,38 @@ function RevealPhase({
   );
 }
 
-function WagerStatusList({ final }: { final: FinalState }) {
+function WagerStatusList({
+  final,
+  onlinePlayerIds,
+}: {
+  final: FinalState;
+  onlinePlayerIds: Set<number>;
+}) {
   const ids = Object.keys(final.starting).map(Number);
   return (
     <ul className="flex flex-col gap-1">
       {ids.map((id) => {
         const start = final.starting[id];
         const wagered = final.entries[id].wagered;
+        const online = onlinePlayerIds.has(id);
+        const dotColor = !online
+          ? 'bg-jeopardy-cream/15'
+          : wagered
+            ? 'bg-green-400'
+            : 'bg-jeopardy-cream/30';
+        const status = !online
+          ? 'offline — skipped'
+          : wagered
+            ? 'wagered'
+            : 'still wagering...';
         return (
-          <li key={id} className="flex items-center gap-2 text-sm">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                wagered ? 'bg-green-400' : 'bg-jeopardy-cream/30'
-              }`}
-            />
+          <li
+            key={id}
+            className={`flex items-center gap-2 text-sm ${online ? '' : 'opacity-50'}`}
+          >
+            <span className={`w-2 h-2 rounded-full ${dotColor}`} />
             <span className="text-jeopardy-cream/80">{start.name}</span>
-            <span className="text-jeopardy-cream/40 text-xs">
-              {wagered ? 'wagered' : 'still wagering...'}
-            </span>
+            <span className="text-jeopardy-cream/40 text-xs">{status}</span>
           </li>
         );
       })}

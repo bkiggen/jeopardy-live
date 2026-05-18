@@ -449,10 +449,9 @@ export function attachSockets(httpServer: HTTPServer): Io {
       entry.wagered = true;
       ack({ ok: true });
 
-      // Auto-advance to answering phase when every eligible player has wagered.
-      const eligibleIds = Object.keys(final.starting).map(Number);
-      const allWagered = eligibleIds.every((id) => final.entries[id].wagered);
-      if (allWagered) startAnswerPhase(io, room);
+      // Auto-advance once every *online* eligible player has wagered. We
+      // don't block on offline players — they can't wager from the void.
+      if (allOnlineWagered(room)) startAnswerPhase(io, room);
       else broadcastGameState(io, room);
     });
 
@@ -714,6 +713,11 @@ export function attachSockets(httpServer: HTTPServer): Io {
         return;
       }
       broadcastRoomState(io, room.code);
+      // If the leaver was the last unsubmitted online wagerer, kick the
+      // wager phase forward instead of stalling on someone who's gone.
+      if (room.game.final?.phase === 'wagering' && allOnlineWagered(room)) {
+        startAnswerPhase(io, room);
+      }
     });
   });
 
@@ -721,6 +725,24 @@ export function attachSockets(httpServer: HTTPServer): Io {
 }
 
 const BUZZ_READ_DELAY_MS = 5000;
+
+function onlineEligibleIds(room: Room): number[] {
+  const final = room.game.final;
+  if (!final) return [];
+  const online = new Set<number>();
+  for (const m of room.members.values()) {
+    if (m.playerId != null && final.starting[m.playerId]) online.add(m.playerId);
+  }
+  return Array.from(online);
+}
+
+function allOnlineWagered(room: Room): boolean {
+  const final = room.game.final;
+  if (!final) return false;
+  const online = onlineEligibleIds(room);
+  if (online.length === 0) return false;
+  return online.every((id) => final.entries[id]?.wagered);
+}
 
 function newActiveClue(clue: { id: number; value: number; question: string; answer: string }): ActiveClue {
   return {
