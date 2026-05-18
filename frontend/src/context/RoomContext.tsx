@@ -48,6 +48,7 @@ type RoomActions = {
   startFinal: () => Promise<AckResponse>;
   finalWager: (wager: number) => Promise<AckResponse>;
   finalAnswer: (answer: string) => Promise<AckResponse>;
+  finalTyping: (text: string) => Promise<AckResponse>;
   forceFinalAnswer: () => Promise<AckResponse>;
   ruleFinal: (playerId: number, correct: boolean) => Promise<AckResponse>;
   applyFinal: () => Promise<AckResponse>;
@@ -205,6 +206,7 @@ export function RoomProvider({ code, isHost, children }: Props) {
       startFinal: () => emit('host:start_final'),
       finalWager: (wager) => emit('player:final_wager', { wager }),
       finalAnswer: (answer) => emit('player:final_answer', { answer }),
+      finalTyping: (text) => emit('player:final_typing', { text }),
       forceFinalAnswer: () => emit('host:force_final_answer'),
       ruleFinal: (playerId, correct) =>
         emit('host:rule_final', { playerId, correct }),

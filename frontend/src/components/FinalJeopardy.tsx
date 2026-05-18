@@ -39,6 +39,7 @@ export function FinalJeopardy() {
           isHost={isHost}
           myPlayerId={myPlayerId}
           onAnswer={actions.finalAnswer}
+          onTyping={actions.finalTyping}
         />
       )}
       {final.phase === 'revealed' && (
@@ -185,11 +186,13 @@ function AnswerPhase({
   isHost,
   myPlayerId,
   onAnswer,
+  onTyping,
 }: {
   final: FinalState;
   isHost: boolean;
   myPlayerId: number | null;
   onAnswer: (text: string) => Promise<{ ok: boolean; error?: string }>;
+  onTyping: (text: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const { settings } = useSettings();
   const myEligible = myPlayerId != null && Boolean(final.starting[myPlayerId]);
@@ -250,7 +253,11 @@ function AnswerPhase({
           <input
             type="text"
             value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setAnswer(v);
+              void onTyping(v);
+            }}
             disabled={submitted}
             placeholder="What is..."
             className="px-3 py-3 rounded bg-white/10 text-jeopardy-cream border border-jeopardy-gold/30 text-lg disabled:opacity-60"

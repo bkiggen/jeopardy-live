@@ -12,6 +12,7 @@ export type Player = {
   id: number;
   name: string;
   isActive: boolean;
+  prefersAllCaps: boolean;
   teamId: number;
   score: number;
 };
@@ -66,6 +67,7 @@ export type ActiveClue = {
   question: string;
   answer: string;
   revealed: boolean;
+  buzzableAt: number;
   buzzedPlayerId: number | null;
   buzzedAt: number | null;
   typingAnswer: string;
@@ -77,6 +79,7 @@ export type RoomScore = {
   playerId: number;
   name: string;
   score: number;
+  prefersAllCaps: boolean;
 };
 
 export type FinalPhase = 'wagering' | 'answering' | 'revealed';
@@ -220,7 +223,10 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ isActive }),
     }),
-  updatePlayer: (id: number, patch: { name?: string; isActive?: boolean }) =>
+  updatePlayer: (
+    id: number,
+    patch: { name?: string; isActive?: boolean; prefersAllCaps?: boolean },
+  ) =>
     request<Player>(`/api/players/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),

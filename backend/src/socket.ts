@@ -79,6 +79,7 @@ type ClientToServer = {
   'player:submit': (payload: { text: string }, ack: Ack) => void;
   'player:final_wager': (payload: { wager: number }, ack: Ack) => void;
   'player:final_answer': (payload: { answer: string }, ack: Ack) => void;
+  'player:final_typing': (payload: { text: string }, ack: Ack) => void;
 };
 
 type ServerToClient = {
@@ -194,6 +195,8 @@ export function attachSockets(httpServer: HTTPServer): Io {
       const clue = room.game.activeClue;
       if (!clue || clue.revealed)
         return ack({ ok: false, error: 'no clue is open for buzzing' });
+      if (Date.now() < clue.buzzableAt)
+        return ack({ ok: false, error: 'wait for the read window to end' });
       if (clue.buzzedPlayerId !== null)
         return ack({ ok: false, error: 'someone already buzzed' });
       if (clue.lockedOutPlayerIds.includes(member.playerId))
@@ -471,6 +474,23 @@ export function attachSockets(httpServer: HTTPServer): Io {
       startAnswerPhase(io, room);
     });
 
+    socket.on('player:final_typing', (payload, ack) => {
+      const room = rooms.get(socket.data.joinedRoomCode ?? '');
+      if (!room) return ack({ ok: false, error: 'not in a room' });
+      const member = room.members.get(socket.id);
+      if (!member?.playerId) return ack({ ok: false, error: 'pick a player first' });
+      const final = room.game.final;
+      if (!final || final.phase !== 'answering')
+        return ack({ ok: false, error: 'not accepting answers' });
+      if (!final.starting[member.playerId])
+        return ack({ ok: false, error: 'not eligible' });
+
+      const entry = final.entries[member.playerId];
+      if (entry.answered) return ack({ ok: true });
+      entry.answer = String(payload.text ?? '').slice(0, 500);
+      ack({ ok: true });
+    });
+
     socket.on('player:final_answer', (payload, ack) => {
       const room = rooms.get(socket.data.joinedRoomCode ?? '');
       if (!room) return ack({ ok: false, error: 'not in a room' });
@@ -700,6 +720,8 @@ export function attachSockets(httpServer: HTTPServer): Io {
   return io;
 }
 
+const BUZZ_READ_DELAY_MS = 5000;
+
 function newActiveClue(clue: { id: number; value: number; question: string; answer: string }): ActiveClue {
   return {
     id: clue.id,
@@ -707,6 +729,7 @@ function newActiveClue(clue: { id: number; value: number; question: string; answ
     question: clue.question,
     answer: clue.answer,
     revealed: false,
+    buzzableAt: Date.now() + BUZZ_READ_DELAY_MS,
     buzzedPlayerId: null,
     buzzedAt: null,
     typingAnswer: '',
@@ -841,12 +864,16 @@ function viewFinal(final: FinalState, member: RoomMember): FinalState {
   const entries: Record<number, FinalEntry> = {};
   for (const [pidStr, e] of Object.entries(final.entries)) {
     const pid = Number(pidStr);
-    const showFull = reveal || isHost || pid === myId;
+    const showWager = reveal || isHost || pid === myId;
+    // Typed-but-unsubmitted text is private to the typer until reveal — the
+    // server tracks it so a running-out timer can still grade an unsubmitted
+    // answer (matches single/double behavior), but no one else should see it.
+    const showAnswer = reveal || pid === myId;
     entries[pid] = {
       wagered: e.wagered,
       answered: e.answered,
-      wager: showFull ? e.wager : null,
-      answer: showFull ? e.answer : null,
+      wager: showWager ? e.wager : null,
+      answer: showAnswer ? e.answer : null,
       correct: reveal ? e.correct : null,
       reasoning: reveal ? e.reasoning : null,
     };

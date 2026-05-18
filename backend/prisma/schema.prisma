@@ -32,12 +32,13 @@ model Team {
 }
 
 model Player {
-  id       Int     @id @default(autoincrement())
-  name     String  @db.VarChar(100)
-  isActive Boolean @default(true) @map("is_active")
-  teamId   Int     @map("team_id")
-  team     Team    @relation(fields: [teamId], references: [id])
-  scores   SeasonScore[]
+  id              Int     @id @default(autoincrement())
+  name            String  @db.VarChar(100)
+  isActive        Boolean @default(true) @map("is_active")
+  prefersAllCaps  Boolean @default(true) @map("prefers_all_caps")
+  teamId          Int     @map("team_id")
+  team            Team    @relation(fields: [teamId], references: [id])
+  scores          SeasonScore[]
 
   @@map("players")
 }

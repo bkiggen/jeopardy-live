@@ -198,6 +198,19 @@ export function AdminView({ refreshPlayers }: Props) {
     }
   }
 
+  async function toggleAllCaps(p: Player) {
+    setBusy(true);
+    try {
+      const result = await callProtected(() =>
+        api.updatePlayer(p.id, { prefersAllCaps: !p.prefersAllCaps }),
+      );
+      if (result == null) return;
+      await Promise.all([refreshTeamPlayers(), refreshPlayers()]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function startEditingPlayer(p: Player) {
     setEditingPlayerId(p.id);
     setEditingPlayerName(p.name);
@@ -728,6 +741,23 @@ export function AdminView({ refreshPlayers }: Props) {
                               </span>
                             )}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleAllCaps(p)}
+                            disabled={busy}
+                            className={`shrink-0 px-2 py-1 rounded font-mono text-xs tracking-wider disabled:opacity-50 ${
+                              p.prefersAllCaps
+                                ? 'bg-jeopardy-gold/20 text-jeopardy-gold hover:bg-jeopardy-gold/40'
+                                : 'bg-white/10 text-jeopardy-cream/70 hover:bg-white/20'
+                            }`}
+                            title={
+                              p.prefersAllCaps
+                                ? 'Clue text shown in ALL CAPS — click for mixed case'
+                                : 'Clue text shown in mixed case — click for ALL CAPS'
+                            }
+                          >
+                            {p.prefersAllCaps ? 'ABC' : 'Abc'}
+                          </button>
                           <button
                             type="button"
                             onClick={() => startEditingPlayer(p)}

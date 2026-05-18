@@ -35,6 +35,21 @@ export function ClueModal() {
     prevBuzzedRef.current = buzzedId;
   }, [buzzedId, isHost, playBuzz]);
 
+  // Read-window countdown: buzzes are blocked for a few seconds after a
+  // clue is revealed so slow readers aren't lapped by trigger-happy buzzers.
+  const buzzableAt = clue?.buzzableAt ?? 0;
+  const [readMsLeft, setReadMsLeft] = useState<number>(() =>
+    Math.max(0, buzzableAt - Date.now()),
+  );
+  useEffect(() => {
+    const tick = () => setReadMsLeft(Math.max(0, buzzableAt - Date.now()));
+    tick();
+    if (buzzableAt <= Date.now()) return;
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, [buzzableAt]);
+  const inReadWindow = readMsLeft > 0;
+
   // Countdown + time-up sound
   const buzzedAt = clue?.buzzedAt ?? null;
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
@@ -87,6 +102,9 @@ export function ClueModal() {
 
   const me = socketId ? members.find((m) => m.socketId === socketId) : null;
   const myPlayerId = me?.playerId ?? null;
+  const myScore = myPlayerId != null ? scores.find((s) => s.playerId === myPlayerId) : null;
+  const allCaps = myScore?.prefersAllCaps ?? true;
+  const caseClass = allCaps ? 'uppercase' : 'normal-case';
 
   const lockedOut =
     myPlayerId !== null && clue.lockedOutPlayerIds.includes(myPlayerId);
@@ -100,13 +118,17 @@ export function ClueModal() {
     clue.buzzedPlayerId !== null
       ? scores.find((s) => s.playerId === clue.buzzedPlayerId)?.name ?? 'Someone'
       : null;
-  const canBuzz = myPlayerId !== null && buzzerOpen && !lockedOut;
+  const canBuzz =
+    myPlayerId !== null && buzzerOpen && !lockedOut && !inReadWindow;
+  const showReadWindow = buzzerOpen && inReadWindow;
 
   return (
     <div className="flex-1 flex flex-col gap-4 animate-clue-in">
       {/* Question */}
       <div className="flex-1 flex items-center justify-center text-center px-2">
-        <p className="font-display text-white text-shadow-clue uppercase leading-tight tracking-wide text-3xl sm:text-4xl md:text-5xl">
+        <p
+          className={`font-display text-white text-shadow-clue ${caseClass} leading-tight tracking-wide text-3xl sm:text-4xl md:text-5xl`}
+        >
           {stripHtmlForDisplay(clue.question)}
         </p>
       </div>
@@ -117,7 +139,9 @@ export function ClueModal() {
           <p className="text-jeopardy-cream/60 text-xs uppercase tracking-widest mb-1">
             Answer
           </p>
-          <p className="font-display text-jeopardy-gold text-3xl uppercase tracking-wide">
+          <p
+            className={`font-display text-jeopardy-gold text-3xl ${caseClass} tracking-wide`}
+          >
             {clue.answer}
           </p>
         </div>
@@ -125,6 +149,28 @@ export function ClueModal() {
 
       {/* Controls */}
       <div className="border-t-2 border-jeopardy-gold/40 pt-3 flex flex-col gap-3">
+        {showReadWindow && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled
+              className="flex-1 py-6 bg-white/10 rounded-lg font-display text-jeopardy-cream/70 text-4xl tracking-[0.4em] shadow-inner cursor-not-allowed"
+              title="Read the clue — buzzers unlock in a moment"
+            >
+              READING · {Math.ceil(readMsLeft / 1000)}s
+            </button>
+            {myPlayerId !== null && !lockedOut && (
+              <button
+                type="button"
+                onClick={() => actions.pass()}
+                title="I don't know — lock me out for this clue"
+                className="shrink-0 px-6 py-6 bg-white/10 hover:bg-white/20 active:scale-95 transition-all rounded-lg font-display text-jeopardy-cream/80 text-2xl tracking-widest"
+              >
+                PASS
+              </button>
+            )}
+          </div>
+        )}
         {canBuzz && (
           <div className="flex gap-2">
             <button

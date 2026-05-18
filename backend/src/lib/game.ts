@@ -18,6 +18,7 @@ export async function loadActiveScores(teamId: number): Promise<RoomScore[]> {
     playerId: p.id,
     name: p.name,
     score: p.scores[0]?.totalScore ?? 0,
+    prefersAllCaps: p.prefersAllCaps,
   }));
 }
 

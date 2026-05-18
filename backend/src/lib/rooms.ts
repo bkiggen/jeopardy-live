@@ -27,6 +27,10 @@ export type ActiveClue = {
   question: string;
   answer: string;
   revealed: boolean;
+  // Buzzes are rejected before this timestamp — gives players a fair window
+  // to read the clue before the fastest buzzer-finger can lock everyone else
+  // out. ms epoch.
+  buzzableAt: number;
   buzzedPlayerId: number | null;
   buzzedAt: number | null;
   typingAnswer: string;
@@ -38,6 +42,7 @@ export type RoomScore = {
   playerId: number;
   name: string;
   score: number;
+  prefersAllCaps: boolean;
 };
 
 export type FinalPhase = 'wagering' | 'answering' | 'revealed';

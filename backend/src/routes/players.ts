@@ -38,6 +38,7 @@ router.get('/', async (req, res) => {
       id: p.id,
       name: p.name,
       isActive: p.isActive,
+      prefersAllCaps: p.prefersAllCaps,
       teamId: p.teamId,
       score: p.scores[0]?.totalScore ?? 0,
     })),
@@ -77,6 +78,7 @@ router.post('/', requirePasscode, async (req, res) => {
     id: player.id,
     name: player.name,
     isActive: true,
+    prefersAllCaps: player.prefersAllCaps,
     teamId,
     score: 0,
   });
@@ -90,10 +92,15 @@ router.patch('/:id', requirePasscode, async (req, res) => {
     return;
   }
 
-  const { isActive, name } = req.body as { isActive?: boolean; name?: string };
-  const data: { isActive?: boolean; name?: string } = {};
+  const { isActive, name, prefersAllCaps } = req.body as {
+    isActive?: boolean;
+    name?: string;
+    prefersAllCaps?: boolean;
+  };
+  const data: { isActive?: boolean; name?: string; prefersAllCaps?: boolean } = {};
   if (typeof isActive === 'boolean') data.isActive = isActive;
   if (typeof name === 'string' && name.trim()) data.name = name.trim().slice(0, 100);
+  if (typeof prefersAllCaps === 'boolean') data.prefersAllCaps = prefersAllCaps;
   if (Object.keys(data).length === 0) {
     res.status(400).json({ error: 'nothing to update' });
     return;
