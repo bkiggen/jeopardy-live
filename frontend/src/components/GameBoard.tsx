@@ -214,30 +214,44 @@ export function GameBoard() {
       {activeClue ? (
         <ClueModal />
       ) : (
-        <div className="flex-1 flex items-center">
-          <div className="grid grid-cols-5 gap-3 w-full">
-            {round.clues.map((c) => {
-              const used = usedClueIds.has(c.id);
-              const interactive = isHost && !used;
-              return (
-                <button
-                  type="button"
-                  key={c.id}
-                  disabled={!interactive}
-                  onClick={() => handlePickClue(c.id)}
-                  className={`rounded-lg font-display tracking-wider h-40 flex items-center justify-center transition-all duration-150 ${
-                    used
-                      ? 'bg-jeopardy-navy-darker/60 text-transparent cursor-not-allowed'
-                      : interactive
-                        ? 'bg-jeopardy-navy-deep text-jeopardy-gold text-[28px] text-shadow-tile hover:bg-blue-700 hover:scale-[1.03] active:scale-95 cursor-pointer shadow-inner'
-                        : 'bg-jeopardy-navy-deep text-jeopardy-gold text-[28px] text-shadow-tile cursor-default'
-                  }`}
-                >
-                  {used ? '·' : `$${c.value}`}
-                </button>
-              );
-            })}
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex items-center">
+            <div className="grid grid-cols-5 gap-3 w-full">
+              {round.clues.map((c) => {
+                const used = usedClueIds.has(c.id);
+                const interactive = isHost && !used;
+                return (
+                  <button
+                    type="button"
+                    key={c.id}
+                    disabled={!interactive}
+                    onClick={() => handlePickClue(c.id)}
+                    className={`rounded-lg font-display tracking-wider h-40 flex items-center justify-center transition-all duration-150 ${
+                      used
+                        ? 'bg-jeopardy-navy-darker/60 text-transparent cursor-not-allowed'
+                        : interactive
+                          ? 'bg-jeopardy-navy-deep text-jeopardy-gold text-[28px] text-shadow-tile hover:bg-blue-700 hover:scale-[1.03] active:scale-95 cursor-pointer shadow-inner'
+                          : 'bg-jeopardy-navy-deep text-jeopardy-gold text-[28px] text-shadow-tile cursor-default'
+                    }`}
+                  >
+                    {used ? '·' : `$${c.value}`}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+          {isHost && usedClueIds.size === 0 && (
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => handleStartRound(round.type)}
+                disabled={loading}
+                className="text-jeopardy-cream/40 hover:text-jeopardy-cream/80 text-xs uppercase tracking-widest disabled:opacity-30 transition-colors"
+              >
+                Reject →
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

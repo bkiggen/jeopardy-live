@@ -54,18 +54,35 @@ async function main() {
   const limited = limit ? records.slice(0, limit) : records;
   if (limit) console.log(`--limit=${limit} → importing first ${limited.length} records`);
 
-  const rows = limited.map((r) => ({
-    showNumber: r.show_number ? Number.parseInt(r.show_number, 10) : null,
-    airDate: r.air_date ? new Date(r.air_date) : null,
-    round: r.round ? ROUND_MAP[r.round] ?? r.round.toLowerCase() : null,
-    category: r.category ?? null,
-    value: parseValue(r.value),
-    question: stripQuotes(r.question),
-    answer: r.answer ?? null,
-  }));
+  // Fetch show numbers already in the DB so we can skip them entirely.
+  // All-or-nothing per show avoids partial duplicates.
+  const existing = await prisma.clue.findMany({
+    select: { showNumber: true },
+    distinct: ['showNumber'],
+  });
+  const existingShows = new Set(
+    existing.map((r) => r.showNumber).filter((n): n is number => n !== null)
+  );
+  console.log(`${existingShows.size} shows already imported — skipping those`);
 
-  console.log('clearing existing clues table');
-  await prisma.clue.deleteMany({});
+  const rows = limited
+    .map((r) => ({
+      showNumber: r.show_number ? Number.parseInt(r.show_number, 10) : null,
+      airDate: r.air_date ? new Date(r.air_date) : null,
+      round: r.round ? ROUND_MAP[r.round] ?? r.round.toLowerCase() : null,
+      category: r.category ?? null,
+      value: parseValue(r.value),
+      question: stripQuotes(r.question),
+      answer: r.answer ?? null,
+    }))
+    .filter((r) => r.showNumber === null || !existingShows.has(r.showNumber));
+
+  console.log(`${rows.length} new clues to insert`);
+  if (rows.length === 0) {
+    console.log('nothing to do');
+    await prisma.$disconnect();
+    return;
+  }
 
   let inserted = 0;
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {

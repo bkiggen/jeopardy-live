@@ -233,6 +233,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
       }
       clue.lockedOutPlayerIds.push(member.playerId);
       ack({ ok: true });
+      if (allOnlinePassed(room)) clue.revealed = true;
       broadcastGameState(io, room);
     });
 
@@ -713,6 +714,10 @@ export function attachSockets(httpServer: HTTPServer): Io {
         return;
       }
       broadcastRoomState(io, room.code);
+      if (allOnlinePassed(room)) {
+        room.game.activeClue!.revealed = true;
+        broadcastGameState(io, room);
+      }
       // If the leaver was the last unsubmitted online wagerer, kick the
       // wager phase forward instead of stalling on someone who's gone.
       if (room.game.final?.phase === 'wagering' && allOnlineWagered(room)) {
@@ -725,6 +730,17 @@ export function attachSockets(httpServer: HTTPServer): Io {
 }
 
 const BUZZ_READ_DELAY_MS = 5000;
+
+function allOnlinePassed(room: Room): boolean {
+  const clue = room.game.activeClue;
+  if (!clue || clue.revealed || clue.buzzedPlayerId !== null || clue.pendingJudgement) return false;
+  const online: number[] = [];
+  for (const m of room.members.values()) {
+    if (m.playerId != null) online.push(m.playerId);
+  }
+  if (online.length === 0) return false;
+  return online.every((id) => clue.lockedOutPlayerIds.includes(id));
+}
 
 function onlineEligibleIds(room: Room): number[] {
   const final = room.game.final;
@@ -823,6 +839,7 @@ async function handleBuzzTimeout(
   clue.buzzedPlayerId = null;
   clue.buzzedAt = null;
   clue.typingAnswer = '';
+  if (allOnlinePassed(room)) clue.revealed = true;
   broadcastGameState(io, room);
 }
 
