@@ -206,6 +206,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
       clue.buzzedPlayerId = member.playerId;
       clue.buzzedAt = Date.now();
       clue.typingAnswer = '';
+      cancelInactivityTimer(room.code);
       ack({ ok: true });
       broadcastGameState(io, room);
 
@@ -329,12 +330,14 @@ export function attachSockets(httpServer: HTTPServer): Io {
       room.game.activeClue = newActiveClue(clue);
       ack({ ok: true });
       broadcastGameState(io, room);
+      scheduleInactivityReveal(io, room.code, BUZZ_READ_DELAY_MS + INACTIVITY_TIMEOUT_MS);
     });
 
     socket.on('host:reveal_answer', (ack) => {
       const room = requireHost(socket);
       if (!room) return ack({ ok: false, error: 'not authorized' });
       if (!room.game.activeClue) return ack({ ok: false, error: 'no active clue' });
+      cancelInactivityTimer(room.code);
       room.game.activeClue.revealed = true;
       ack({ ok: true });
       broadcastGameState(io, room);
@@ -343,6 +346,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
     socket.on('host:close_clue', (ack) => {
       const room = requireHost(socket);
       if (!room) return ack({ ok: false, error: 'not authorized' });
+      cancelInactivityTimer(room.code);
       const active = room.game.activeClue;
       if (active) {
         if (!room.game.usedClueIds.includes(active.id)) {
@@ -572,6 +576,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
       clue.typingAnswer = '';
       clue.pendingJudgement = null;
       ack({ ok: true });
+      scheduleInactivityReveal(io, room.code);
       broadcastGameState(io, room);
     });
 
@@ -598,6 +603,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
         playerName: player?.name ?? pending.playerName,
         delta: clue.value,
       };
+      cancelInactivityTimer(room.code);
       clue.revealed = true;
       clue.pendingJudgement = null;
       if (!room.game.usedClueIds.includes(clue.id)) {
@@ -636,6 +642,11 @@ export function attachSockets(httpServer: HTTPServer): Io {
       }
       clue.pendingJudgement = null;
       ack({ ok: true });
+      if (allOnlinePassed(room)) {
+        clue.revealed = true;
+      } else {
+        scheduleInactivityReveal(io, room.code);
+      }
       broadcastGameState(io, room);
     });
 
@@ -698,6 +709,7 @@ export function attachSockets(httpServer: HTTPServer): Io {
         room.game.activeClue.buzzedPlayerId = null;
         room.game.activeClue.buzzedAt = null;
         room.game.activeClue.typingAnswer = '';
+        scheduleInactivityReveal(io, room.code);
         broadcastGameState(io, room);
       }
       if (room.hostSocketId === socket.id) {
@@ -730,6 +742,28 @@ export function attachSockets(httpServer: HTTPServer): Io {
 }
 
 const BUZZ_READ_DELAY_MS = 5000;
+const INACTIVITY_TIMEOUT_MS = 10_000;
+
+const inactivityTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function cancelInactivityTimer(roomCode: string): void {
+  const t = inactivityTimers.get(roomCode);
+  if (t) { clearTimeout(t); inactivityTimers.delete(roomCode); }
+}
+
+function scheduleInactivityReveal(io: Io, roomCode: string, delayMs = INACTIVITY_TIMEOUT_MS): void {
+  cancelInactivityTimer(roomCode);
+  const t = setTimeout(() => {
+    inactivityTimers.delete(roomCode);
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const clue = room.game.activeClue;
+    if (!clue || clue.revealed || clue.buzzedPlayerId !== null || clue.pendingJudgement) return;
+    clue.revealed = true;
+    broadcastGameState(io, room);
+  }, delayMs);
+  inactivityTimers.set(roomCode, t);
+}
 
 function allOnlinePassed(room: Room): boolean {
   const clue = room.game.activeClue;
@@ -839,7 +873,11 @@ async function handleBuzzTimeout(
   clue.buzzedPlayerId = null;
   clue.buzzedAt = null;
   clue.typingAnswer = '';
-  if (allOnlinePassed(room)) clue.revealed = true;
+  if (allOnlinePassed(room)) {
+    clue.revealed = true;
+  } else {
+    scheduleInactivityReveal(io, roomCode);
+  }
   broadcastGameState(io, room);
 }
 
